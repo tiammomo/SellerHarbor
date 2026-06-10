@@ -1,0 +1,18 @@
+[project]
+name = "reviewpilot-backend"
+version = "0.1.0"
+description = "ReviewPilot Python backend powered by FastAPI, LangChain, and LangGraph"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.125.0",
+    "uvicorn[standard]>=0.38.0",
+    "pydantic>=2.12.0",
+    "httpx>=0.28.0",
+    "langchain>=1.2.0",
+    "langchain-core>=1.2.0",
+    "langgraph>=1.0.0",
+]
+
+[tool.uv]
+package = false
+

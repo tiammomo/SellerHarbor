@@ -1,0 +1,9 @@
+from __future__ import annotations
+
+import secrets
+import time
+
+
+def new_id(prefix: str) -> str:
+    return f"{prefix}_{int(time.time() * 1000):x}_{secrets.token_hex(4)}"
+
