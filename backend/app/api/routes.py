@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException, Query
 from app.agents.review_generation import run_generation_agent
 from app.core.config import settings
 from app.db import repository
-from app.models.schemas import CreateFeedback, CreateProduct, GenerationConfig, ReviewRequest
+from app.models.schemas import CreateFeedback, CreateProduct, GenerationConfig, MarketIngestionRequest, ReviewRequest
+from app.services.market_ingestion import ingest_open_food_facts
 from app.services.platform_rules import all_platform_rules
 from app.services.product_sourcing import all_research_providers, build_opportunity_report, build_opportunity_reports
 
@@ -63,6 +64,16 @@ async def product_sourcing_report(product_id: str):
             for content in task.contents
         ],
     )
+
+
+@router.get("/product-sourcing/ingestion-runs")
+async def product_sourcing_ingestion_runs(limit: int = Query(default=20, ge=1, le=100)):
+    return repository.list_market_ingestion_runs(limit)
+
+
+@router.post("/product-sourcing/ingest/open-food-facts")
+async def product_sourcing_ingest_open_food_facts(payload: MarketIngestionRequest):
+    return await ingest_open_food_facts(payload)
 
 
 @router.get("/dashboard")

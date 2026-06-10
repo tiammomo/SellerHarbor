@@ -172,6 +172,31 @@ export interface ProductOpportunityReport {
   sourceTrace: string[];
 }
 
+export interface MarketIngestionItem {
+  sourceProductId: string;
+  productName: string;
+  imageUrl?: string;
+  sourceUrl?: string;
+  status: "created" | "skipped" | "failed";
+  reason?: string;
+  productId?: string;
+}
+
+export interface MarketIngestionRun {
+  id: string;
+  providerId: string;
+  keyword: string;
+  status: "completed" | "skipped" | "failed";
+  requestedLimit: number;
+  createdCount: number;
+  skippedCount: number;
+  items: MarketIngestionItem[];
+  message?: string;
+  startedAt: string;
+  finishedAt: string;
+  nextAllowedAt?: string;
+}
+
 // Generated content
 export interface GeneratedContent {
   id: string;

@@ -4,6 +4,7 @@ import type {
   GeneratedContent,
   GenerationConfig,
   GenerationTask,
+  MarketIngestionRun,
   ProductOpportunityReport,
   ProductResearchProvider,
   PlatformRule,
@@ -59,11 +60,23 @@ export type CreateFeedbackPayload = {
   consentStatus?: Feedback["consentStatus"];
 };
 
+export type IngestOpenFoodFactsPayload = {
+  keyword?: string;
+  limit?: number;
+  force?: boolean;
+};
+
 export const apiClient = {
   getDashboard: () => request<DashboardStats>("/dashboard"),
   getPlatformRules: () => request<PlatformRule[]>("/rules/platforms"),
   getProductResearchProviders: () => request<ProductResearchProvider[]>("/product-sourcing/providers"),
   getProductOpportunityReports: () => request<ProductOpportunityReport[]>("/product-sourcing/reports"),
+  getMarketIngestionRuns: () => request<MarketIngestionRun[]>("/product-sourcing/ingestion-runs"),
+  ingestOpenFoodFacts: (payload: IngestOpenFoodFactsPayload) =>
+    request<MarketIngestionRun>("/product-sourcing/ingest/open-food-facts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   getProducts: () => request<Product[]>("/products"),
   createProduct: (payload: CreateProductPayload) =>
     request<Product>("/products", { method: "POST", body: JSON.stringify(payload) }),

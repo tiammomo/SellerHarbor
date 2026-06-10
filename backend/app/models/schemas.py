@@ -240,6 +240,37 @@ class ProductOpportunityReport(BaseModel):
     sourceTrace: list[str] = Field(default_factory=list)
 
 
+class MarketIngestionRequest(BaseModel):
+    keyword: str = "coffee"
+    limit: int = Field(default=3, ge=1, le=8)
+    force: bool = False
+
+
+class MarketIngestionItem(BaseModel):
+    sourceProductId: str
+    productName: str
+    imageUrl: str | None = None
+    sourceUrl: str | None = None
+    status: Literal["created", "skipped", "failed"]
+    reason: str | None = None
+    productId: str | None = None
+
+
+class MarketIngestionRun(BaseModel):
+    id: str
+    providerId: str
+    keyword: str
+    status: Literal["completed", "skipped", "failed"]
+    requestedLimit: int
+    createdCount: int
+    skippedCount: int
+    items: list[MarketIngestionItem] = Field(default_factory=list)
+    message: str | None = None
+    startedAt: str
+    finishedAt: str
+    nextAllowedAt: str | None = None
+
+
 class PlatformRule(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

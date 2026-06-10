@@ -84,3 +84,23 @@ The Docker layout intentionally keeps responsibilities separate:
 - PostgreSQL will own normalized product/source/snapshot metadata.
 - Redis will own async job queues and short-lived crawling locks.
 - MinIO/R2-compatible storage will own product images, thumbnails, and crawl screenshots.
+
+## Low-Frequency Product Sourcing Demo
+
+The current backend includes a small low-frequency ingestion path for Open Food Facts:
+
+```bash
+curl -X POST http://localhost:38081/api/product-sourcing/ingest/open-food-facts \
+  -H 'content-type: application/json' \
+  -d '{"keyword":"coffee","limit":3,"force":false}'
+```
+
+Behavior:
+
+- Uses the official Open Food Facts search API.
+- Fetches at most a few products per request.
+- Stores product name, source link, barcode/source id, image URL, ingredients, labels, and nutrition metadata in the existing product pool.
+- Applies a six-hour low-frequency guard for the same keyword unless `force=true`.
+- Frontend `/products` exposes this through the `低频采集样本` button.
+
+The demo intentionally does not download image binaries yet. It stores source image URLs and marks them as real product images. Future image storage should move binaries to MinIO/R2 and store object keys plus source evidence in PostgreSQL.

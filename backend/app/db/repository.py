@@ -16,6 +16,8 @@ from app.models.schemas import (
     GeneratedContent,
     GenerationConfig,
     GenerationTask,
+    MarketIngestionItem,
+    MarketIngestionRun,
     Product,
     QualityReport,
     ReviewRecord,
@@ -87,6 +89,21 @@ def init_db() -> None:
               comment TEXT,
               reviewer TEXT NOT NULL,
               created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS market_ingestion_runs (
+              id TEXT PRIMARY KEY,
+              provider_id TEXT NOT NULL,
+              keyword TEXT NOT NULL,
+              status TEXT NOT NULL,
+              requested_limit INTEGER NOT NULL,
+              created_count INTEGER NOT NULL,
+              skipped_count INTEGER NOT NULL,
+              items TEXT NOT NULL,
+              message TEXT,
+              started_at TEXT NOT NULL,
+              finished_at TEXT NOT NULL,
+              next_allowed_at TEXT
             );
             """
         )
@@ -443,6 +460,84 @@ def dashboard_stats() -> DashboardStats:
     )
 
 
+def last_market_ingestion_run(provider_id: str, keyword: str) -> MarketIngestionRun | None:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM market_ingestion_runs
+            WHERE provider_id = ? AND keyword = ?
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (provider_id, keyword.strip().lower()),
+        ).fetchone()
+    return _market_ingestion_run(row) if row else None
+
+
+def list_market_ingestion_runs(limit: int = 20) -> list[MarketIngestionRun]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM market_ingestion_runs ORDER BY started_at DESC LIMIT ?",
+            (max(1, min(100, limit)),),
+        ).fetchall()
+    return [_market_ingestion_run(row) for row in rows]
+
+
+def create_market_ingestion_run(
+    *,
+    provider_id: str,
+    keyword: str,
+    status: str,
+    requested_limit: int,
+    created_count: int,
+    skipped_count: int,
+    items: list[MarketIngestionItem],
+    message: str | None,
+    started_at: str,
+    finished_at: str,
+    next_allowed_at: str | None,
+) -> MarketIngestionRun:
+    run_id = new_id("ingest")
+    normalized_keyword = keyword.strip().lower()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO market_ingestion_runs
+            (id, provider_id, keyword, status, requested_limit, created_count, skipped_count, items, message, started_at, finished_at, next_allowed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                provider_id,
+                normalized_keyword,
+                status,
+                requested_limit,
+                created_count,
+                skipped_count,
+                _json([item.model_dump() for item in items]),
+                message,
+                started_at,
+                finished_at,
+                next_allowed_at,
+            ),
+        )
+        conn.commit()
+    return MarketIngestionRun(
+        id=run_id,
+        providerId=provider_id,
+        keyword=normalized_keyword,
+        status=status,
+        requestedLimit=requested_limit,
+        createdCount=created_count,
+        skippedCount=skipped_count,
+        items=items,
+        message=message,
+        startedAt=started_at,
+        finishedAt=finished_at,
+        nextAllowedAt=next_allowed_at,
+    )
+
+
 def _task(row: sqlite3.Row) -> GenerationTask:
     contents = list_contents(task_id=row["id"])
     return GenerationTask(
@@ -498,6 +593,23 @@ def _content(row: sqlite3.Row) -> GeneratedContent:
         editedText=row["edited_text"],
         qualityReport=QualityReport.model_validate(_loads(row["quality_report"], {})),
         createdAt=row["created_at"],
+    )
+
+
+def _market_ingestion_run(row: sqlite3.Row) -> MarketIngestionRun:
+    return MarketIngestionRun(
+        id=row["id"],
+        providerId=row["provider_id"],
+        keyword=row["keyword"],
+        status=row["status"],
+        requestedLimit=row["requested_limit"],
+        createdCount=row["created_count"],
+        skippedCount=row["skipped_count"],
+        items=[MarketIngestionItem.model_validate(item) for item in _loads(row["items"], [])],
+        message=row["message"],
+        startedAt=row["started_at"],
+        finishedAt=row["finished_at"],
+        nextAllowedAt=row["next_allowed_at"],
     )
 
 

@@ -64,7 +64,9 @@ export default function ProductsPage() {
     contents,
     productResearchProviders,
     productOpportunityReports,
+    marketIngestionRuns,
     createProduct,
+    ingestOpenFoodFacts,
   } = useDataStore();
   const [productForm] = Form.useForm();
   const [search, setSearch] = useState("");
@@ -76,6 +78,7 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<ProductResearchProvider | null>(null);
   const [addVisible, setAddVisible] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category))], [products]);
   const providerById = useMemo(
@@ -122,6 +125,7 @@ export default function ProductsPage() {
   }, [insights, opportunityFilter, platformFilter, search, selectedCategory, sortKey]);
 
   const selectedInsight = selectedProduct ? insights.find((item) => item.product.id === selectedProduct.id) : undefined;
+  const latestIngestionRun = marketIngestionRuns[0];
 
   const openDetail = (product: Product) => {
     setSelectedProduct(product);
@@ -148,6 +152,25 @@ export default function ProductsPage() {
     }
   };
 
+  const handleOpenFoodFactsIngest = async () => {
+    setIngesting(true);
+    try {
+      const keyword = search.trim() || "coffee";
+      const run = await ingestOpenFoodFacts({ keyword, limit: 3, force: false });
+      if (run.status === "skipped") {
+        Message.info(run.message || "低频保护中，本次未重复采集");
+      } else if (run.status === "failed") {
+        Message.error(run.message || "采集失败");
+      } else {
+        Message.success(`已采集 ${run.createdCount} 个新选品，跳过 ${run.skippedCount} 个重复/无效项`);
+      }
+    } catch (error) {
+      Message.error(error instanceof Error ? error.message : "采集失败");
+    } finally {
+      setIngesting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <PageHeader
@@ -155,9 +178,14 @@ export default function ProductsPage() {
         subtitle="评估商品机会、平台适配、反馈证据和可生成素材准备度"
         icon={<IconApps />}
         extra={
-          <Button type="primary" icon={<IconPlus />} onClick={() => setAddVisible(true)}>
-            新增选品
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button loading={ingesting} onClick={handleOpenFoodFactsIngest}>
+              低频采集样本
+            </Button>
+            <Button type="primary" icon={<IconPlus />} onClick={() => setAddVisible(true)}>
+              新增选品
+            </Button>
+          </div>
         }
       />
 
@@ -177,7 +205,15 @@ export default function ProductsPage() {
                 先用 Amazon 一方/三方工具做需求验证，再用 TikTok/广告工具做内容热度验证，最后补供应链和合规复核。
               </p>
             </div>
-            <Tag color="blue">Provider 框架已就绪</Tag>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tag color="blue">Provider 框架已就绪</Tag>
+              <Tag color="green">Open Food Facts 可自动采集</Tag>
+              {latestIngestionRun && (
+                <Tag color={latestIngestionRun.status === "failed" ? "red" : latestIngestionRun.status === "skipped" ? "orange" : "cyan"}>
+                  最近采集：{latestIngestionRun.createdCount} 新增
+                </Tag>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {productResearchProviders.slice(0, 6).map((provider) => (

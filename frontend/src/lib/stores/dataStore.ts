@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiClient, type CreateFeedbackPayload, type CreateProductPayload } from "@/lib/api/client";
+import { apiClient, type CreateFeedbackPayload, type CreateProductPayload, type IngestOpenFoodFactsPayload } from "@/lib/api/client";
 import type {
   Product,
   Feedback,
@@ -7,6 +7,7 @@ import type {
   GeneratedContent,
   DashboardStats,
   GenerationConfig,
+  MarketIngestionRun,
   ProductOpportunityReport,
   ProductResearchProvider,
   PlatformRule,
@@ -32,6 +33,7 @@ interface DataState {
   platformRules: PlatformRule[];
   productResearchProviders: ProductResearchProvider[];
   productOpportunityReports: ProductOpportunityReport[];
+  marketIngestionRuns: MarketIngestionRun[];
   loading: boolean;
   initialized: boolean;
   error?: string;
@@ -40,6 +42,7 @@ interface DataState {
   createProduct: (product: CreateProductPayload) => Promise<Product>;
   createFeedback: (feedback: CreateFeedbackPayload) => Promise<Feedback>;
   createGeneration: (config: GenerationConfig) => Promise<GenerationTask>;
+  ingestOpenFoodFacts: (payload: IngestOpenFoodFactsPayload) => Promise<MarketIngestionRun>;
   updateContentReview: (contentId: string, status: GeneratedContent["reviewStatus"]) => Promise<GeneratedContent>;
   getProducts: () => Product[];
   getFeedbacksByProduct: (productId: string) => Feedback[];
@@ -56,6 +59,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   platformRules: [],
   productResearchProviders: [],
   productOpportunityReports: [],
+  marketIngestionRuns: [],
   loading: false,
   initialized: false,
 
@@ -76,6 +80,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         platformRules,
         productResearchProviders,
         productOpportunityReports,
+        marketIngestionRuns,
       ] = await Promise.all([
         apiClient.getProducts(),
         apiClient.getFeedbacks(),
@@ -85,6 +90,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         apiClient.getPlatformRules(),
         apiClient.getProductResearchProviders(),
         apiClient.getProductOpportunityReports(),
+        apiClient.getMarketIngestionRuns(),
       ]);
 
       set({
@@ -96,6 +102,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         platformRules,
         productResearchProviders,
         productOpportunityReports,
+        marketIngestionRuns,
         loading: false,
         initialized: true,
       });
@@ -150,6 +157,15 @@ export const useDataStore = create<DataState>((set, get) => ({
     }));
     void get().refreshAll();
     return task;
+  },
+
+  ingestOpenFoodFacts: async (payload) => {
+    const run = await apiClient.ingestOpenFoodFacts(payload);
+    set((state) => ({
+      marketIngestionRuns: [run, ...state.marketIngestionRuns.filter((item) => item.id !== run.id)],
+    }));
+    await get().refreshAll();
+    return run;
   },
 
   updateContentReview: async (contentId, status) => {
