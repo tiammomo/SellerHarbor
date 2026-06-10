@@ -70,14 +70,14 @@ npm run dev
 
 ## Docker 组件化启动
 
-默认只启动应用组件：
+默认启动应用组件和 MinIO 对象存储：
 
 ```bash
 cp .env.docker.example .env
 docker compose up --build
 ```
 
-需要同时启动后续选品采集与图片存储基础组件：
+需要同时启动 PostgreSQL / Redis 等后续基础组件：
 
 ```bash
 docker compose --profile infra up --build
@@ -87,9 +87,9 @@ Docker 组件：
 
 - `backend`: FastAPI + LangChain + LangGraph，端口 `38081`。
 - `frontend`: Next.js standalone，端口 `33001`。
+- `minio`: S3 兼容对象存储，用于保存自动采集的商品图片，API 端口 `39000`，控制台端口 `39001`。
 - `postgres`: 可选，后续用于商品、来源、采集快照和图片元数据。
 - `redis`: 可选，后续用于异步采集任务和缓存。
-- `minio`: 可选，S3 兼容对象存储，后续用于商品图、缩略图和采集截图。
 
 更多说明见 [Docker Components](docs/DOCKER.md)。
 

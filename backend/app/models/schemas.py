@@ -250,6 +250,9 @@ class MarketIngestionItem(BaseModel):
     sourceProductId: str
     productName: str
     imageUrl: str | None = None
+    sourceImageUrl: str | None = None
+    imageStorageKey: str | None = None
+    imageStorageStatus: Literal["stored", "source_url", "failed"] | None = None
     sourceUrl: str | None = None
     status: Literal["created", "skipped", "failed"]
     reason: str | None = None

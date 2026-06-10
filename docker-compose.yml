@@ -15,6 +15,7 @@ services:
       ANTHROPIC_AUTH_TOKEN: "${ANTHROPIC_AUTH_TOKEN:-}"
       ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-mimo-v2.5-pro}"
       REVIEWPILOT_LLM_TIMEOUT_SECONDS: "${REVIEWPILOT_LLM_TIMEOUT_SECONDS:-180}"
+      REVIEWPILOT_PUBLIC_API_BASE_URL: "${REVIEWPILOT_PUBLIC_API_BASE_URL:-http://localhost:38081}"
       REVIEWPILOT_POSTGRES_DSN: "${REVIEWPILOT_POSTGRES_DSN:-postgresql://reviewpilot:reviewpilot@postgres:5432/reviewpilot}"
       REVIEWPILOT_REDIS_URL: "${REVIEWPILOT_REDIS_URL:-redis://redis:6379/0}"
       REVIEWPILOT_OBJECT_STORAGE_ENDPOINT: "${REVIEWPILOT_OBJECT_STORAGE_ENDPOINT:-http://minio:9000}"
@@ -24,6 +25,9 @@ services:
       REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY: "${REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY:-reviewpilot-secret}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      minio:
+        condition: service_started
     ports:
       - "38081:38081"
     volumes:
@@ -97,8 +101,6 @@ services:
   minio:
     image: minio/minio:latest
     container_name: reviewpilot-minio
-    profiles:
-      - infra
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-reviewpilot}"
@@ -115,8 +117,6 @@ services:
   minio-init:
     image: minio/mc:latest
     container_name: reviewpilot-minio-init
-    profiles:
-      - infra
     depends_on:
       - minio
     entrypoint: >

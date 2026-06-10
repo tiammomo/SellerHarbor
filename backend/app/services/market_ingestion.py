@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 
 from app.db import repository
-from app.models.schemas import CreateProduct, MarketIngestionItem, MarketIngestionRequest, MarketIngestionRun
+from app.models.schemas import CreateProduct, MarketIngestionItem, MarketIngestionRequest, MarketIngestionRun, Product
+from app.services import object_storage
 
 
 OPEN_FOOD_FACTS_PROVIDER_ID = "open_food_facts"
@@ -33,7 +35,7 @@ async def ingest_open_food_facts(payload: MarketIngestionRequest) -> MarketInges
 
     try:
         raw_products = await _search_open_food_facts(keyword=keyword, limit=limit)
-        items = _persist_open_food_facts_products(raw_products=raw_products, keyword=keyword, limit=limit)
+        items = await _persist_open_food_facts_products(raw_products=raw_products, keyword=keyword, limit=limit)
         status = "completed"
         message = f"已从 Open Food Facts 低频采集 {len([item for item in items if item.status == 'created'])} 个商品候选。"
     except Exception as exc:
@@ -95,8 +97,8 @@ async def _search_open_food_facts(*, keyword: str, limit: int) -> list[dict[str,
     return [product for product in products if isinstance(product, dict)]
 
 
-def _persist_open_food_facts_products(*, raw_products: list[dict[str, Any]], keyword: str, limit: int) -> list[MarketIngestionItem]:
-    existing_by_source_id = _existing_source_ids()
+async def _persist_open_food_facts_products(*, raw_products: list[dict[str, Any]], keyword: str, limit: int) -> list[MarketIngestionItem]:
+    existing_by_source_id = _existing_by_source_id()
     items: list[MarketIngestionItem] = []
     created = 0
 
@@ -118,30 +120,51 @@ def _persist_open_food_facts_products(*, raw_products: list[dict[str, Any]], key
             items.append(_item(raw, status="skipped", reason="缺少可展示商品图"))
             continue
         if code in existing_by_source_id:
+            existing_product = existing_by_source_id[code]
             items.append(
                 MarketIngestionItem(
                     sourceProductId=code,
                     productName=name,
-                    imageUrl=image_url,
+                    imageUrl=existing_product.attributes.get("商品图片URL") or image_url,
+                    sourceImageUrl=existing_product.attributes.get("原始商品图片URL") or image_url,
+                    imageStorageKey=existing_product.attributes.get("对象存储Key") or None,
+                    imageStorageStatus=_item_storage_status(existing_product),
                     sourceUrl=source_url,
                     status="skipped",
                     reason="商品已存在，按来源商品 ID 去重",
-                    productId=existing_by_source_id[code],
+                    productId=existing_product.id,
                 )
             )
             continue
 
-        product = repository.create_product(_to_product(raw, keyword=keyword, image_url=image_url, source_url=source_url))
-        existing_by_source_id[code] = product.id
+        image_asset = await _store_image_asset(source_image_url=image_url, keyword=keyword, source_product_id=code)
+        product = repository.create_product(
+            _to_product(
+                raw,
+                keyword=keyword,
+                image_url=image_asset["image_url"],
+                source_image_url=image_url,
+                source_url=source_url,
+                image_storage_key=image_asset["storage_key"],
+                image_storage_status=image_asset["storage_status"],
+                image_storage_message=image_asset["storage_message"],
+                image_content_type=image_asset["content_type"],
+                image_size_bytes=image_asset["size_bytes"],
+            )
+        )
+        existing_by_source_id[code] = product
         created += 1
         items.append(
             MarketIngestionItem(
                 sourceProductId=code,
                 productName=product.name,
-                imageUrl=image_url,
+                imageUrl=image_asset["image_url"],
+                sourceImageUrl=image_url,
+                imageStorageKey=image_asset["storage_key"],
+                imageStorageStatus=image_asset["storage_status"],
                 sourceUrl=source_url,
                 status="created",
-                reason="已写入选品池",
+                reason=image_asset["storage_message"] or "已写入选品池",
                 productId=product.id,
             )
         )
@@ -149,7 +172,19 @@ def _persist_open_food_facts_products(*, raw_products: list[dict[str, Any]], key
     return items
 
 
-def _to_product(raw: dict[str, Any], *, keyword: str, image_url: str, source_url: str) -> CreateProduct:
+def _to_product(
+    raw: dict[str, Any],
+    *,
+    keyword: str,
+    image_url: str,
+    source_image_url: str,
+    source_url: str,
+    image_storage_key: str | None,
+    image_storage_status: str | None,
+    image_storage_message: str,
+    image_content_type: str,
+    image_size_bytes: int,
+) -> CreateProduct:
     code = str(raw.get("code") or "").strip()
     name = _clean_text(raw.get("product_name"))
     brands = _clean_text(raw.get("brands"))
@@ -163,12 +198,20 @@ def _to_product(raw: dict[str, Any], *, keyword: str, image_url: str, source_url
 
     attributes = {
         "商品图片URL": image_url,
+        "原始商品图片URL": source_image_url,
         "来源链接": source_url,
         "数据来源": "Open Food Facts",
         "来源商品ID": code,
         "采集方式": "官方API",
         "采集关键词": keyword,
         "采集时间": repository.now_iso(),
+        "图片存储": "MinIO" if image_storage_status == "stored" else "来源URL",
+        "图片存储状态": _image_storage_label(image_storage_status),
+        "图片存储说明": image_storage_message,
+        "对象存储Bucket": object_storage.status()["bucket"] if image_storage_status == "stored" else "",
+        "对象存储Key": image_storage_key or "",
+        "图片ContentType": image_content_type,
+        "图片大小Bytes": str(image_size_bytes) if image_size_bytes else "",
         "品牌": brands,
         "规格": quantity,
         "开放类目": _clean_text(raw.get("categories")),
@@ -202,14 +245,63 @@ def _to_product(raw: dict[str, Any], *, keyword: str, image_url: str, source_url
     )
 
 
-def _existing_source_ids() -> dict[str, str]:
-    result: dict[str, str] = {}
+async def _store_image_asset(*, source_image_url: str, keyword: str, source_product_id: str) -> dict[str, Any]:
+    if not object_storage.configured():
+        return {
+            "image_url": source_image_url,
+            "storage_key": None,
+            "storage_status": "source_url",
+            "storage_message": "对象存储未配置，保留来源图片 URL",
+            "content_type": "",
+            "size_bytes": 0,
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": "ReviewPilot/0.1 image-ingestion"}, follow_redirects=True) as client:
+            response = await client.get(source_image_url)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "")
+            if not content_type.lower().startswith("image/"):
+                raise ValueError(f"非图片响应：{content_type or 'unknown'}")
+            data = response.content
+            if len(data) > 5 * 1024 * 1024:
+                raise ValueError("图片超过 5MB，已跳过对象存储")
+
+        stored = await asyncio.to_thread(
+            object_storage.store_product_image,
+            provider_id=OPEN_FOOD_FACTS_PROVIDER_ID,
+            keyword=keyword,
+            source_product_id=source_product_id,
+            data=data,
+            content_type=content_type,
+        )
+        return {
+            "image_url": stored.url,
+            "storage_key": stored.key,
+            "storage_status": "stored",
+            "storage_message": "图片已下载并存入 MinIO",
+            "content_type": stored.content_type,
+            "size_bytes": stored.size,
+        }
+    except Exception as exc:
+        return {
+            "image_url": source_image_url,
+            "storage_key": None,
+            "storage_status": "failed",
+            "storage_message": f"MinIO 存储失败，保留来源图片 URL：{exc}",
+            "content_type": "",
+            "size_bytes": 0,
+        }
+
+
+def _existing_by_source_id() -> dict[str, Product]:
+    result: dict[str, Product] = {}
     for product in repository.list_products():
         if product.attributes.get("数据来源") != "Open Food Facts":
             continue
         source_id = product.attributes.get("来源商品ID")
         if source_id:
-            result[source_id] = product.id
+            result[source_id] = product
     return result
 
 
@@ -219,6 +311,7 @@ def _item(raw: dict[str, Any], *, status: str, reason: str) -> MarketIngestionIt
         sourceProductId=code or "unknown",
         productName=_clean_text(raw.get("product_name")) or "unknown",
         imageUrl=_clean_text(raw.get("image_front_url")) or _clean_text(raw.get("image_url")) or None,
+        sourceImageUrl=_clean_text(raw.get("image_front_url")) or _clean_text(raw.get("image_url")) or None,
         sourceUrl=f"https://world.openfoodfacts.org/product/{code}" if code else None,
         status=status,
         reason=reason,
@@ -244,6 +337,24 @@ def _category_tag_for_keyword(keyword: str) -> str:
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _item_storage_status(product: Product) -> str | None:
+    if product.attributes.get("对象存储Key"):
+        return "stored"
+    if product.attributes.get("商品图片URL"):
+        return "source_url"
+    return None
+
+
+def _image_storage_label(value: str | None) -> str:
+    if value == "stored":
+        return "已存入对象存储"
+    if value == "failed":
+        return "存储失败，使用来源图片"
+    if value == "source_url":
+        return "使用来源图片"
+    return ""
 
 
 def _labels(value: Any) -> list[str]:

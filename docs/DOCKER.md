@@ -4,11 +4,11 @@ ReviewPilot can run as separate Docker components:
 
 - `backend`: FastAPI + LangChain + LangGraph, exposed on `38081`.
 - `frontend`: Next.js standalone app, exposed on `33001`.
+- `minio`: S3-compatible object storage for product images and crawl screenshots.
 - `postgres`: optional future persistence component for market/product snapshots.
 - `redis`: optional future task queue/cache component for crawling and image jobs.
-- `minio`: optional S3-compatible object storage for product images and crawl screenshots.
 
-The current application still uses SQLite by default. PostgreSQL, Redis, and MinIO are provided as modular infrastructure for the next data-ingestion phase.
+The current application still uses SQLite by default for metadata. MinIO is active in the product-ingestion path; PostgreSQL and Redis remain modular infrastructure for later crawling and job orchestration.
 
 ## Quick Start
 
@@ -31,10 +31,14 @@ Open:
 - Frontend: `http://localhost:33001`
 - Backend: `http://localhost:38081`
 - Health: `http://localhost:38081/healthz`
+- MinIO API: `http://localhost:39000`
+- MinIO Console: `http://localhost:39001`
 
-## With Infrastructure Components
+The `minio-init` service creates the `reviewpilot-assets` bucket automatically. The backend also creates the bucket lazily if it is missing.
 
-Start app plus PostgreSQL, Redis, and MinIO:
+## With Optional Infrastructure Components
+
+Start app plus PostgreSQL and Redis:
 
 ```bash
 docker compose --profile infra up --build
@@ -44,10 +48,6 @@ Infra ports:
 
 - PostgreSQL: `localhost:35432`
 - Redis: `localhost:36379`
-- MinIO API: `http://localhost:39000`
-- MinIO Console: `http://localhost:39001`
-
-The `minio-init` service creates the `reviewpilot-assets` bucket automatically.
 
 ## LLM Proxy
 
@@ -65,9 +65,9 @@ On Linux, `docker-compose.yml` maps `host.docker.internal` to the host gateway t
 Named volumes:
 
 - `reviewpilot-backend-data`: SQLite database for the current MVP.
+- `reviewpilot-minio-data`: object storage data for product images.
 - `reviewpilot-postgres-data`: optional PostgreSQL data.
 - `reviewpilot-redis-data`: optional Redis append-only data.
-- `reviewpilot-minio-data`: optional object storage data.
 
 Reset local Docker data:
 
@@ -83,7 +83,7 @@ The Docker layout intentionally keeps responsibilities separate:
 - Frontend owns UI and calls the backend through `NEXT_PUBLIC_API_BASE_URL`.
 - PostgreSQL will own normalized product/source/snapshot metadata.
 - Redis will own async job queues and short-lived crawling locks.
-- MinIO/R2-compatible storage will own product images, thumbnails, and crawl screenshots.
+- MinIO/R2-compatible storage owns downloaded product images now, and will also own thumbnails and crawl screenshots later.
 
 ## Low-Frequency Product Sourcing Demo
 
@@ -99,8 +99,15 @@ Behavior:
 
 - Uses the official Open Food Facts search API.
 - Fetches at most a few products per request.
-- Stores product name, source link, barcode/source id, image URL, ingredients, labels, and nutrition metadata in the existing product pool.
+- Downloads the product image into MinIO when object storage is configured.
+- Stores product name, source link, barcode/source id, MinIO-backed image URL, original image URL, object key, ingredients, labels, and nutrition metadata in the existing product pool.
 - Applies a six-hour low-frequency guard for the same keyword unless `force=true`.
 - Frontend `/products` exposes this through the `低频采集样本` button.
 
-The demo intentionally does not download image binaries yet. It stores source image URLs and marks them as real product images. Future image storage should move binaries to MinIO/R2 and store object keys plus source evidence in PostgreSQL.
+Product images are served through the backend asset proxy:
+
+```text
+http://localhost:38081/api/assets/{object-key}
+```
+
+The bucket can stay private. If MinIO is unavailable, ingestion falls back to the original source image URL and records the storage failure in product attributes.

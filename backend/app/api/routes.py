@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from app.agents.review_generation import run_generation_agent
 from app.core.config import settings
 from app.db import repository
 from app.models.schemas import CreateFeedback, CreateProduct, GenerationConfig, MarketIngestionRequest, ReviewRequest
 from app.services.market_ingestion import ingest_open_food_facts
+from app.services import object_storage
 from app.services.platform_rules import all_platform_rules
 from app.services.product_sourcing import all_research_providers, build_opportunity_report, build_opportunity_reports
 
@@ -26,6 +27,28 @@ async def llm_config() -> dict:
         "provider": settings.llm.provider,
         "baseUrl": settings.llm.base_url,
     }
+
+
+@router.get("/storage/status")
+async def storage_status() -> dict:
+    return object_storage.status()
+
+
+@router.api_route("/assets/{object_key:path}", methods=["GET", "HEAD"])
+async def get_asset(object_key: str, request: Request):
+    try:
+        asset = object_storage.read_object(object_key)
+    except object_storage.ObjectStorageError as exc:
+        status_code = 404 if object_storage.configured() else 503
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return Response(
+        content=b"" if request.method == "HEAD" else asset.data,
+        media_type=asset.content_type,
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "Content-Length": str(len(asset.data)),
+        },
+    )
 
 
 @router.get("/rules/platforms")

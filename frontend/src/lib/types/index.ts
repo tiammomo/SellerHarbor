@@ -176,6 +176,9 @@ export interface MarketIngestionItem {
   sourceProductId: string;
   productName: string;
   imageUrl?: string;
+  sourceImageUrl?: string;
+  imageStorageKey?: string;
+  imageStorageStatus?: "stored" | "source_url" | "failed";
   sourceUrl?: string;
   status: "created" | "skipped" | "failed";
   reason?: string;

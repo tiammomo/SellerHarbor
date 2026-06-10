@@ -20,16 +20,32 @@ class LLMSettings:
 
 
 @dataclass(frozen=True)
+class ObjectStorageSettings:
+    endpoint: str
+    bucket: str
+    region: str
+    access_key: str
+    secret_key: str
+    public_api_base_url: str
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.endpoint and self.bucket and self.access_key and self.secret_key)
+
+
+@dataclass(frozen=True)
 class Settings:
     port: int
     db_path: Path
     seed_demo: bool
     llm: LLMSettings
+    object_storage: ObjectStorageSettings
 
 
 def load_settings() -> Settings:
     claude = _read_claude_code_settings()
     env = claude.get("env", {})
+    port = int(_first(os.getenv("REVIEWPILOT_PORT"), "38081"))
 
     model = _first(
         os.getenv("REVIEWPILOT_LLM_MODEL"),
@@ -50,7 +66,7 @@ def load_settings() -> Settings:
     provider = _first(os.getenv("REVIEWPILOT_LLM_PROVIDER"), "anthropic" if base_url else "anthropic")
 
     return Settings(
-        port=int(_first(os.getenv("REVIEWPILOT_PORT"), "38081")),
+        port=port,
         db_path=Path(_first(os.getenv("REVIEWPILOT_DB_PATH"), "data/reviewpilot.db")),
         seed_demo=_truthy(_first(os.getenv("REVIEWPILOT_SEED_DEMO"), "true")),
         llm=LLMSettings(
@@ -59,6 +75,14 @@ def load_settings() -> Settings:
             api_key=api_key,
             model=model,
             timeout_seconds=float(_first(os.getenv("REVIEWPILOT_LLM_TIMEOUT_SECONDS"), "180")),
+        ),
+        object_storage=ObjectStorageSettings(
+            endpoint=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_ENDPOINT")),
+            bucket=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_BUCKET"), "reviewpilot-assets"),
+            region=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_REGION"), "us-east-1"),
+            access_key=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_ACCESS_KEY")),
+            secret_key=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY")),
+            public_api_base_url=_first(os.getenv("REVIEWPILOT_PUBLIC_API_BASE_URL"), f"http://localhost:{port}").rstrip("/"),
         ),
     )
 
