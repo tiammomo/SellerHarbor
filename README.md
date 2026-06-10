@@ -68,6 +68,31 @@ npm run dev
 - Backend: `http://localhost:38081`
 - Health: `http://localhost:38081/healthz`
 
+## Docker 组件化启动
+
+默认只启动应用组件：
+
+```bash
+cp .env.docker.example .env
+docker compose up --build
+```
+
+需要同时启动后续选品采集与图片存储基础组件：
+
+```bash
+docker compose --profile infra up --build
+```
+
+Docker 组件：
+
+- `backend`: FastAPI + LangChain + LangGraph，端口 `38081`。
+- `frontend`: Next.js standalone，端口 `33001`。
+- `postgres`: 可选，后续用于商品、来源、采集快照和图片元数据。
+- `redis`: 可选，后续用于异步采集任务和缓存。
+- `minio`: 可选，S3 兼容对象存储，后续用于商品图、缩略图和采集截图。
+
+更多说明见 [Docker Components](docs/DOCKER.md)。
+
 ## 推荐技术栈
 
 - Python 3.13+
@@ -87,6 +112,7 @@ npm run dev
 - [提示词与生成策略](docs/PROMPTING.md)
 - [安全与合规边界](docs/SAFETY_AND_COMPLIANCE.md)
 - [开发路线图](docs/ROADMAP.md)
+- [Docker 组件化运行](docs/DOCKER.md)
 
 ## 后续开发建议
 

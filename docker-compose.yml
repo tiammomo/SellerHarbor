@@ -1,0 +1,142 @@
+name: reviewpilot
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: reviewpilot/backend:local
+    container_name: reviewpilot-backend
+    environment:
+      REVIEWPILOT_PORT: "38081"
+      REVIEWPILOT_DB_PATH: /data/reviewpilot.db
+      REVIEWPILOT_SEED_DEMO: "${REVIEWPILOT_SEED_DEMO:-true}"
+      ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-http://host.docker.internal:17878}"
+      ANTHROPIC_AUTH_TOKEN: "${ANTHROPIC_AUTH_TOKEN:-}"
+      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-mimo-v2.5-pro}"
+      REVIEWPILOT_LLM_TIMEOUT_SECONDS: "${REVIEWPILOT_LLM_TIMEOUT_SECONDS:-180}"
+      REVIEWPILOT_POSTGRES_DSN: "${REVIEWPILOT_POSTGRES_DSN:-postgresql://reviewpilot:reviewpilot@postgres:5432/reviewpilot}"
+      REVIEWPILOT_REDIS_URL: "${REVIEWPILOT_REDIS_URL:-redis://redis:6379/0}"
+      REVIEWPILOT_OBJECT_STORAGE_ENDPOINT: "${REVIEWPILOT_OBJECT_STORAGE_ENDPOINT:-http://minio:9000}"
+      REVIEWPILOT_OBJECT_STORAGE_BUCKET: "${REVIEWPILOT_OBJECT_STORAGE_BUCKET:-reviewpilot-assets}"
+      REVIEWPILOT_OBJECT_STORAGE_REGION: "${REVIEWPILOT_OBJECT_STORAGE_REGION:-us-east-1}"
+      REVIEWPILOT_OBJECT_STORAGE_ACCESS_KEY: "${REVIEWPILOT_OBJECT_STORAGE_ACCESS_KEY:-reviewpilot}"
+      REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY: "${REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY:-reviewpilot-secret}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "38081:38081"
+    volumes:
+      - reviewpilot-backend-data:/data
+    restart: unless-stopped
+    networks:
+      - reviewpilot
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL:-http://localhost:38081/api}"
+    image: reviewpilot/frontend:local
+    container_name: reviewpilot-frontend
+    environment:
+      PORT: "33001"
+      HOSTNAME: "0.0.0.0"
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "33001:33001"
+    restart: unless-stopped
+    networks:
+      - reviewpilot
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: reviewpilot-postgres
+    profiles:
+      - infra
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-reviewpilot}"
+      POSTGRES_USER: "${POSTGRES_USER:-reviewpilot}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-reviewpilot}"
+    ports:
+      - "35432:5432"
+    volumes:
+      - reviewpilot-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - reviewpilot
+
+  redis:
+    image: redis:7-alpine
+    container_name: reviewpilot-redis
+    profiles:
+      - infra
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "36379:6379"
+    volumes:
+      - reviewpilot-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - reviewpilot
+
+  minio:
+    image: minio/minio:latest
+    container_name: reviewpilot-minio
+    profiles:
+      - infra
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-reviewpilot}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-reviewpilot-secret}"
+    ports:
+      - "39000:9000"
+      - "39001:9001"
+    volumes:
+      - reviewpilot-minio-data:/data
+    restart: unless-stopped
+    networks:
+      - reviewpilot
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: reviewpilot-minio-init
+    profiles:
+      - infra
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set reviewpilot http://minio:9000 $${MINIO_ROOT_USER:-reviewpilot} $${MINIO_ROOT_PASSWORD:-reviewpilot-secret}; do sleep 2; done;
+      mc mb --ignore-existing reviewpilot/$${REVIEWPILOT_OBJECT_STORAGE_BUCKET:-reviewpilot-assets};
+      "
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-reviewpilot}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-reviewpilot-secret}"
+      REVIEWPILOT_OBJECT_STORAGE_BUCKET: "${REVIEWPILOT_OBJECT_STORAGE_BUCKET:-reviewpilot-assets}"
+    networks:
+      - reviewpilot
+
+networks:
+  reviewpilot:
+    driver: bridge
+
+volumes:
+  reviewpilot-backend-data:
+  reviewpilot-postgres-data:
+  reviewpilot-redis-data:
+  reviewpilot-minio-data:
