@@ -109,6 +109,13 @@ SELLERHARBOR_CORS_ALLOW_ORIGINS=https://your-frontend.example.com
 SELLERHARBOR_DEFAULT_TENANT_ID=<tenant-id>
 SELLERHARBOR_ALLOWED_TENANT_IDS=<tenant-a>,<tenant-b>
 NEXT_PUBLIC_SELLERHARBOR_TENANT_ID=<tenant-id>
+SELLERHARBOR_DEFAULT_STORE_ID=<store-id>
+SELLERHARBOR_DEFAULT_STORE_NAME=<store-name>
+SELLERHARBOR_DEFAULT_STORE_PLATFORM=temu
+SELLERHARBOR_DEFAULT_STORE_REGION=<region>
+SELLERHARBOR_DEFAULT_STORE_WAREHOUSE=<warehouse-name>
+SELLERHARBOR_ALLOWED_STORE_IDS=<store-a>,<store-b>
+SELLERHARBOR_MULTI_STORE_ENABLED=false
 SELLERHARBOR_AUTH_REQUIRED=true
 SELLERHARBOR_API_KEYS=<strong-random-key>
 NEXT_PUBLIC_SELLERHARBOR_API_KEY=<same-key-for-internal-deployments>
@@ -121,6 +128,8 @@ SELLERHARBOR_GENERATION_TASK_TIMEOUT_SECONDS=600
 `SELLERHARBOR_API_KEYS` enables a basic API-key transport gate through the `X-SellerHarbor-API-Key` header. It is useful for an internal deployment behind a trusted network or reverse proxy, but it is not a replacement for full user login and tenant-level authorization.
 
 Tenant isolation is enforced by the `X-SellerHarbor-Tenant-ID` header. Existing local data migrates to the default tenant. In production, set `SELLERHARBOR_ALLOWED_TENANT_IDS` so unknown tenant ids are rejected before business logic runs.
+
+Store configuration is currently a default single-store profile under the tenant. Keep `SELLERHARBOR_MULTI_STORE_ENABLED=false` until a second real store is ready; future platform listings and credentials should attach to `store_id` rather than duplicating product master data.
 
 ## Generation Jobs
 

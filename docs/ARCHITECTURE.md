@@ -38,6 +38,7 @@ Docker profiles:
 - `app/api/routes.py`: API 路由，覆盖商品、反馈、生成、审核、概览、采集实验、健康检查。
 - `app/db/repository.py`: SQLite repository 和 schema migration。
 - `app/services/commerce_overview.py`: 跨境运营概览，聚合商品、平台、仓库、库存和热款信号。
+- `app/services/store_registry.py`: 默认店铺、多店铺扩展槽和 storeId 数据边界。
 - `app/services/business_overview.py`: 内容与评价运营概览。
 - `app/services/feedback_organizer.py`: 不依赖外部模型的反馈整理能力。
 - `app/agents/review_generation.py`: LangGraph / LangChain 内容生成链路。
@@ -63,6 +64,7 @@ Core APIs:
 
 - `GET /api/commerce/overview`
 - `GET /api/business/overview`
+- `GET /api/stores/registry`
 - `GET /api/products`
 - `POST /api/products`
 - `GET /api/feedback`
@@ -73,6 +75,7 @@ Core APIs:
 - `GET /api/generation-jobs/{task_id}`
 - `POST /api/generated-contents/{id}/review`
 - `GET /api/audit/events`
+- `GET /api/integrations/temu/status`
 - `GET /api/readiness`
 - `GET /api/metrics`
 
@@ -94,11 +97,20 @@ Current MVP tables:
 
 Current lightweight commerce attributes are stored in `products.attributes`, including SKU, platform status, warehouse, stock, sales, rating and review counts. The next phase should migrate these fields into dedicated tables:
 
+- `stores`
 - `warehouses`
 - `inventory_items`
 - `inventory_movements`
-- `platform_listings`
 - `platform_allocations`
+- `platform_listings`
+
+Store boundary:
+
+- Tenant remains the merchant/team isolation boundary.
+- Product remains tenant-level master data.
+- Store represents one Temu / TikTok Shop sales account under a tenant.
+- PlatformListing maps one product to one store and carries platform-specific title, status, external listing id and sync state.
+- Store credentials must be encrypted and scoped per store before real multi-store sync or write-back.
 
 ## 7. 生成链路
 
@@ -128,7 +140,7 @@ Important rules:
 - 每个响应带 `X-Request-ID`。
 - 多租户通过 `X-SellerHarbor-Tenant-ID` 传递。
 - `/api/metrics` 暴露请求数、错误数、限流数、平均耗时和生成任务状态。
-- `/api/readiness` 检查数据库、LLM、对象存储、租户、认证、限流、任务队列、种子数据和 CORS。
+- `/api/readiness` 检查数据库、LLM、对象存储、Temu 接入、店铺注册、租户、认证、限流、任务队列、种子数据和 CORS。
 - 启动时会把超时的 `pending/generating` 任务恢复为 `failed`，避免重启后永久卡住。
 - Docker 默认栈使用 healthcheck 和 `depends_on: condition: service_healthy` 控制启动顺序。
 
@@ -141,4 +153,5 @@ Important rules:
 3. 长任务迁移到 Redis-backed worker。
 4. 加入正式用户登录、角色权限和租户管理。
 5. 接入反向代理、TLS、集中日志、指标和告警。
-6. 平台 CSV / API 同步加入重试、幂等、死信和审计。
+6. 店铺、平台 Listing、共享仓库存分配和平台授权凭证迁移到结构化表。
+7. 平台 CSV / API 同步加入重试、幂等、死信和审计。

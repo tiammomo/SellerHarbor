@@ -7,11 +7,13 @@
 - [产品需求文档](PRD.md)：业务背景、用户角色、核心功能、数据对象和成功指标。
 - [长期能力规划](CAPABILITY_PLAN.md)：商品主档、平台 Listing、海外仓、热款追踪和高可用方向。
 - [开发路线图](ROADMAP.md)：当前基线、分阶段交付计划和延后能力。
+- [多店铺管理规划](STORE_MANAGEMENT.md)：单店铺当前模式、多店铺数据边界、storeId 扩展和后续表设计。
 
 ## 技术与运行
 
 - [技术架构](ARCHITECTURE.md)：前后端、服务模块、API 边界、数据模型、生成链路和可靠性设计。
 - [Docker 组件化运行](DOCKER.md)：本地启动、可选 infra/ops/init profile、数据卷和改名迁移说明。
+- [Temu 接入计划](TEMU_INTEGRATION.md)：只读同步优先策略、需要提供的信息、接口落地阶段和风险边界。
 
 ## 内容安全
 
