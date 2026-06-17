@@ -19,7 +19,7 @@ import QualityBar from "@/components/common/QualityBar";
 import RiskTag from "@/components/common/RiskTag";
 import EmptyState from "@/components/common/EmptyState";
 import { ContentTypeTag, PlatformTag } from "@/components/common/ConfigTags";
-import { platformLabels, type GeneratedContent, type Platform } from "@/lib/types";
+import { contentTypeLabels, platformLabels, type GeneratedContent, type Platform } from "@/lib/types";
 
 type RiskFilter = "all" | "has_risk" | "safe_alternative" | "high_score";
 
@@ -84,6 +84,16 @@ export default function ReviewPage() {
     }
   };
 
+  const handleRewrite = async (id: string) => {
+    try {
+      await updateContentReview(id, "rewriting");
+      Message.info("已标记为需要重写");
+      if (detailVisible) setDetailVisible(false);
+    } catch (error) {
+      Message.error(error instanceof Error ? error.message : "审核提交失败");
+    }
+  };
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     Message.success("已复制到剪贴板");
@@ -95,19 +105,25 @@ export default function ReviewPage() {
       Message.warning("暂无已通过内容");
       return;
     }
-    const lines = approved.map((content, index) => {
+    const rows = approved.map((content) => {
       const task = tasks.find((item) => item.id === content.taskId);
       return [
-        `#${index + 1} ${task?.productName || "未知商品"} / ${task?.config.platform ? platformLabels[task.config.platform] : "未知平台"}`,
-        `质量分: ${content.score}`,
-        content.text,
-      ].join("\n");
+        task?.productName || "未知商品",
+        task?.config.contentType ? contentTypeLabels[task.config.contentType] : "",
+        task?.config.platform ? platformLabels[task.config.platform] : "未知平台",
+        content.score,
+        content.riskFlags.join("; "),
+        content.sourceTrace.join("; "),
+        content.editedText || content.text,
+      ];
     });
-    const blob = new Blob([lines.join("\n\n---\n\n")], { type: "text/plain;charset=utf-8" });
+    const header = ["商品", "内容类型", "平台", "质量分", "风险标记", "来源依据", "内容"];
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `reviewpilot-approved-${new Date().toISOString().slice(0, 10)}.txt`;
+    anchor.download = `sellerharbor-approved-${new Date().toISOString().slice(0, 10)}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
     Message.success(`已导出 ${approved.length} 条通过内容`);
@@ -122,11 +138,11 @@ export default function ReviewPage() {
     <div className="max-w-7xl mx-auto">
       <PageHeader
         title="审核中心"
-        subtitle="审核、编辑和管理生成的口碑内容"
+        subtitle="复核风险、确认来源依据，并导出可使用的口碑素材"
         icon={<IconCheckCircle />}
         extra={
           <Button icon={<IconDownload />} onClick={handleExportApproved}>
-            导出通过内容
+            导出通过素材
           </Button>
         }
       />
@@ -226,7 +242,7 @@ export default function ReviewPage() {
 
                     {/* Content text */}
                     <p className="text-sm leading-relaxed mb-3" style={{ color: "var(--text-color-2)" }}>
-                      {content.text}
+                      {content.editedText || content.text}
                     </p>
 
                     {/* Footer */}
@@ -243,7 +259,7 @@ export default function ReviewPage() {
                         <Button type="text" size="small" icon={<IconEye />} onClick={() => openDetail(content)}>
                           详情
                         </Button>
-                        <Button type="text" size="small" icon={<IconCopy />} onClick={() => handleCopy(content.text)}>
+                        <Button type="text" size="small" icon={<IconCopy />} onClick={() => handleCopy(content.editedText || content.text)}>
                           复制
                         </Button>
                         {content.reviewStatus === "pending" && (
@@ -257,7 +273,7 @@ export default function ReviewPage() {
                           </>
                         )}
                         {content.reviewStatus === "approved" && (
-                          <Button type="text" size="small" icon={<IconCopy />} onClick={() => handleCopy(content.text)}>
+                          <Button type="text" size="small" icon={<IconCopy />} onClick={() => handleCopy(content.editedText || content.text)}>
                             复制使用
                           </Button>
                         )}
@@ -299,12 +315,12 @@ export default function ReviewPage() {
 
               <div className="p-4 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)" }}>
                 <p className="text-sm leading-relaxed m-0" style={{ color: "var(--text-color-2)" }}>
-                  {selectedContent.text}
+                  {selectedContent.editedText || selectedContent.text}
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                <Button type="text" size="small" icon={<IconCopy />} onClick={() => handleCopy(selectedContent.text)}>
+                <Button type="text" size="small" icon={<IconCopy />} onClick={() => handleCopy(selectedContent.editedText || selectedContent.text)}>
                   复制文本
                 </Button>
               </div>
@@ -343,7 +359,7 @@ export default function ReviewPage() {
                   <Button status="danger" onClick={() => handleReject(selectedContent.id)}>
                     驳回
                   </Button>
-                  <Button icon={<IconRefresh />}>
+                  <Button icon={<IconRefresh />} onClick={() => handleRewrite(selectedContent.id)}>
                     请求重写
                   </Button>
                 </div>
@@ -367,16 +383,21 @@ function ReviewMetric({ label, value, color }: { label: string; value: number; c
 
 function reviewAdvice(content: GeneratedContent): string {
   if (content.riskFlags.includes("safe_alternative_generated")) {
-    return "这是安全替代话术，适合评价邀请或客服回访，不建议当作用户好评直接发布。";
+    return "这是安全替代话术，适合评价邀请或客服回访，不建议当作用户评价直接发布。";
   }
   if (content.riskFlags.length > 0) {
     return "存在风险标记，建议先核对来源依据、禁用表达和平台规则，再决定通过或重写。";
   }
   if (content.score >= 85) {
-    return "质量分高且无风险标记，可优先复制使用或沉淀为商品常用好评模板。";
+    return "质量分高且无风险标记，可优先复制使用或沉淀为商品常用口碑模板。";
   }
   if (content.score >= 70) {
     return "基础可用，建议人工微调语气和细节后再通过。";
   }
   return "质量偏低，建议驳回或请求重写。";
+}
+
+function csvCell(value: unknown): string {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
 }

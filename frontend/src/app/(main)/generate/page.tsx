@@ -31,6 +31,58 @@ import {
 const { Row, Col } = Grid;
 const FormItem = Form.Item;
 
+const businessPresets: Array<{
+  key: string;
+  label: string;
+  description: string;
+  contentType: ContentType;
+  persona: Persona;
+  tone: Tone;
+  length: Length;
+  count: number;
+}> = [
+  {
+    key: "review_invitation",
+    label: "评价邀请",
+    description: "客服触达",
+    contentType: "review_invitation",
+    persona: "merchant",
+    tone: "sincere",
+    length: "short",
+    count: 3,
+  },
+  {
+    key: "cs_followup",
+    label: "客服回访",
+    description: "售后复盘",
+    contentType: "cs_followup",
+    persona: "merchant",
+    tone: "professional",
+    length: "medium",
+    count: 3,
+  },
+  {
+    key: "detail_page",
+    label: "详情页口碑",
+    description: "商详素材",
+    contentType: "detail_page",
+    persona: "merchant",
+    tone: "natural",
+    length: "medium",
+    count: 3,
+  },
+  {
+    key: "recommendation",
+    label: "推荐语",
+    description: "私域/导购",
+    contentType: "recommendation",
+    persona: "third_person",
+    tone: "natural",
+    length: "short",
+    count: 5,
+  },
+];
+
 export default function GeneratePage() {
   return (
     <Suspense fallback={<GenerateLoading />}>
@@ -59,20 +111,22 @@ function GenerateLoading() {
 function GenerateWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { products, feedbacks, contents, platformRules, createGeneration, updateContentReview } = useDataStore();
+  const { products, feedbacks, contents, platformRules, createGenerationJob, getGenerationTask, updateContentReview } = useDataStore();
 
   const productIdFromUrl = searchParams.get("productId") || undefined;
   const feedbackIdFromUrl = searchParams.get("feedbackId") || undefined;
   const [selectedProduct, setSelectedProduct] = useState<string | undefined>(productIdFromUrl);
   const [selectedFeedback, setSelectedFeedback] = useState<string | undefined>(feedbackIdFromUrl);
-  const [contentType, setContentType] = useState<ContentType>("review_draft");
+  const [contentType, setContentType] = useState<ContentType>("review_invitation");
   const [platform, setPlatform] = useState<Platform>("taobao");
-  const [tone, setTone] = useState<Tone>("natural");
+  const [tone, setTone] = useState<Tone>("sincere");
   const [length, setLength] = useState<Length>("medium");
-  const [persona, setPersona] = useState<Persona>("first_person");
+  const [persona, setPersona] = useState<Persona>("merchant");
   const [scenario, setScenario] = useState("");
   const [count, setCount] = useState(3);
   const [generating, setGenerating] = useState(false);
+  const [generationStatusText, setGenerationStatusText] = useState("");
+  const [currentTaskId, setCurrentTaskId] = useState<string | undefined>();
   const [generatedResults, setGeneratedResults] = useState<typeof contents>([]);
 
   const productFeedbacks = useMemo(
@@ -101,6 +155,19 @@ function GenerateWorkspace() {
     [contentType, persona, selectedFeedbackEntity, selectedProductEntity, selectedRule]
   );
   const scenarioOptions = selectedProductEntity?.usageScenarios.slice(0, 4) || [];
+  const activePresetKey = useMemo(() => {
+    return businessPresets.find(
+      (preset) => preset.contentType === contentType && preset.persona === persona && preset.tone === tone && preset.length === length
+    )?.key;
+  }, [contentType, length, persona, tone]);
+
+  const applyPreset = (preset: (typeof businessPresets)[number]) => {
+    setContentType(preset.contentType);
+    setPersona(preset.persona);
+    setTone(preset.tone);
+    setLength(preset.length);
+    setCount(preset.count);
+  };
 
   const handleGenerate = async () => {
     if (!selectedProduct) {
@@ -108,8 +175,11 @@ function GenerateWorkspace() {
       return;
     }
     setGenerating(true);
+    setGenerationStatusText("正在提交生成任务...");
+    setCurrentTaskId(undefined);
+    setGeneratedResults([]);
     try {
-      const task = await createGeneration({
+      const task = await createGenerationJob({
         productId: selectedProduct,
         feedbackId: effectiveSelectedFeedback,
         contentType,
@@ -120,10 +190,33 @@ function GenerateWorkspace() {
         scenario: scenario.trim() || undefined,
         count,
       });
-      setGeneratedResults(task.contents || []);
-      Message.success(`已生成 ${task.contents.length} 条候选内容`);
+      setCurrentTaskId(task.id);
+      setGenerationStatusText("任务已入队，正在等待模型生成...");
+
+      let latestTask = task;
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        await sleep(attempt < 5 ? 1200 : 2000);
+        latestTask = await getGenerationTask(task.id);
+        if (latestTask.status === "pending") {
+          setGenerationStatusText("任务排队中...");
+        }
+        if (latestTask.status === "generating") {
+          setGenerationStatusText("模型正在生成候选内容...");
+        }
+        if (latestTask.status === "completed") {
+          setGeneratedResults(latestTask.contents || []);
+          setGenerationStatusText("");
+          Message.success(`已生成 ${latestTask.contents.length} 条候选内容`);
+          return;
+        }
+        if (latestTask.status === "failed") {
+          throw new Error(latestTask.message || "生成任务失败");
+        }
+      }
+      throw new Error("生成任务超时，请稍后在生成记录中查看结果");
     } catch (error) {
       Message.error(error instanceof Error ? error.message : "生成失败");
+      setGenerationStatusText(error instanceof Error ? error.message : "生成失败");
     } finally {
       setGenerating(false);
     }
@@ -153,8 +246,8 @@ function GenerateWorkspace() {
   return (
     <div className="max-w-7xl mx-auto">
       <PageHeader
-        title="生成工作台"
-        subtitle="配置生成参数，基于商品资料和真实反馈生成口碑内容"
+        title="口碑生成工作台"
+        subtitle="优先生成评价邀请、客服回访、推荐语和详情页口碑素材"
         icon={<IconEdit />}
       />
 
@@ -163,8 +256,29 @@ function GenerateWorkspace() {
         <Col xs={24} lg={10}>
           <Card style={{ borderRadius: 16 }} className="mb-6">
             <h3 className="text-base font-semibold mb-4" style={{ color: "var(--text-color-1)" }}>
-              生成配置
+              业务场景
             </h3>
+            <div className="grid grid-cols-2 gap-2 mb-5">
+              {businessPresets.map((preset) => {
+                const active = activePresetKey === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => applyPreset(preset)}
+                    className="cursor-pointer rounded-xl border px-3 py-3 text-left transition-all"
+                    style={{
+                      borderColor: active ? "rgba(249, 115, 22, 0.45)" : "var(--border-color-light)",
+                      backgroundColor: active ? "rgba(249, 115, 22, 0.1)" : "var(--color-fill-1)",
+                      color: "var(--text-color-1)",
+                    }}
+                  >
+                    <div className="text-sm font-semibold">{preset.label}</div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--text-color-3)" }}>{preset.description}</div>
+                  </button>
+                );
+              })}
+            </div>
             <Form layout="vertical">
               <FormItem label="选择商品" required>
                 <Select
@@ -183,7 +297,7 @@ function GenerateWorkspace() {
 
               <FormItem label="关联反馈">
                 <Select
-                  placeholder="选择反馈（可选）"
+                  placeholder="关联真实反馈（推荐）"
                   value={effectiveSelectedFeedback}
                   onChange={setSelectedFeedback}
                   allowClear
@@ -283,15 +397,15 @@ function GenerateWorkspace() {
                 disabled={!selectedProduct}
                 style={{ height: 48, fontSize: 16 }}
               >
-                {generating ? "正在生成..." : "开始生成"}
+                {generating ? "任务处理中..." : "开始生成"}
               </Button>
             </Form>
           </Card>
 
           {selectedRule && (
             <Card style={{ borderRadius: 16 }} className="mb-6">
-              <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>
-                平台好评策略
+            <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>
+                平台合规策略
               </h3>
               <div className="space-y-3">
                 <StrategyRow label="目标" value={selectedRule.objective} />
@@ -401,8 +515,13 @@ function GenerateWorkspace() {
               <div className="flex flex-col items-center justify-center py-20">
                 <Spin size={48} />
                 <p className="mt-4 text-sm" style={{ color: "var(--text-color-3)" }}>
-                  正在基于商品资料和客户反馈生成内容...
+                  {generationStatusText || "正在基于商品资料和客户反馈生成内容..."}
                 </p>
+                {currentTaskId && (
+                  <p className="mt-2 text-xs" style={{ color: "var(--text-color-3)" }}>
+                    任务 ID: {currentTaskId}
+                  </p>
+                )}
               </div>
             </Card>
           ) : (
@@ -534,4 +653,8 @@ function expectedAgentRoute(checks: Array<{ blocking: boolean; ok: boolean }>) {
     return ["policy_guard", "generate_drafts", "evaluate_and_check_risk", "rewrite_drafts?"];
   }
   return ["policy_guard", "generate_drafts", "evaluate_and_check_risk"];
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

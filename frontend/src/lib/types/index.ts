@@ -1,6 +1,7 @@
 // Product types
 export interface Product {
   id: string;
+  tenantId: string;
   name: string;
   category: string;
   attributes: Record<string, string>;
@@ -16,6 +17,7 @@ export interface Product {
 // Feedback types
 export interface Feedback {
   id: string;
+  tenantId: string;
   productId: string;
   productName?: string;
   sourceType: "customer_review" | "cs_summary" | "after_sales" | "authorized";
@@ -24,6 +26,22 @@ export interface Feedback {
   subjectiveOpinions: string[];
   consentStatus: "confirmed" | "pending" | "not_required";
   createdAt: string;
+}
+
+export interface FeedbackOrganization {
+  productId: string;
+  productName?: string;
+  sourceType: Feedback["sourceType"];
+  consentStatus: Feedback["consentStatus"];
+  sourceSummary: string;
+  confirmedFacts: string[];
+  subjectiveOpinions: string[];
+  uncertainClaims: string[];
+  riskFlags: string[];
+  recommendedContentTypes: ContentType[];
+  readinessScore: number;
+  nextActions: string[];
+  sourceTrace: string[];
 }
 
 // Generation config
@@ -43,7 +61,9 @@ export type Platform =
   | "pdd"
   | "douyin"
   | "xiaohongshu"
-  | "independent";
+  | "independent"
+  | "temu"
+  | "tiktok_shop";
 
 export type Tone = "natural" | "sincere" | "lively" | "professional" | "brief" | "detailed";
 export type Length = "short" | "medium" | "long";
@@ -187,6 +207,7 @@ export interface MarketIngestionItem {
 
 export interface MarketIngestionRun {
   id: string;
+  tenantId: string;
   providerId: string;
   keyword: string;
   status: "completed" | "skipped" | "failed";
@@ -203,6 +224,7 @@ export interface MarketIngestionRun {
 // Generated content
 export interface GeneratedContent {
   id: string;
+  tenantId: string;
   taskId: string;
   text: string;
   score: number;
@@ -227,21 +249,36 @@ export interface QualityReport {
 // Generation task
 export interface GenerationTask {
   id: string;
+  tenantId: string;
   productId: string;
   productName?: string;
   config: GenerationConfig;
   status: "pending" | "generating" | "completed" | "failed";
+  message?: string;
   contents: GeneratedContent[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 // Review record
 export interface ReviewRecord {
   id: string;
+  tenantId: string;
   contentId: string;
   action: "approved" | "rejected" | "rewrite_requested";
   comment?: string;
   reviewer: string;
+  createdAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  tenantId: string;
+  actor: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  metadata: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -257,9 +294,172 @@ export interface DashboardStats {
   weeklyGenerations: number[];
 }
 
+export interface BusinessProductGap {
+  productId: string;
+  productName: string;
+  category: string;
+  gap: "missing_feedback" | "weak_product_profile" | "missing_forbidden_claims";
+  detail: string;
+  nextActionHref: string;
+}
+
+export interface BusinessEvidenceCoverage {
+  totalProducts: number;
+  productsWithUsableFeedback: number;
+  productsWithoutUsableFeedback: number;
+  readyProducts: number;
+  coverageRate: number;
+  gaps: BusinessProductGap[];
+}
+
+export interface BusinessReviewFunnel {
+  pending: number;
+  approved: number;
+  rejected: number;
+  rewriting: number;
+  exportable: number;
+  approvalRate: number;
+}
+
+export interface BusinessContentMixItem {
+  contentType: ContentType;
+  label: string;
+  count: number;
+  share: number;
+}
+
+export interface BusinessRiskBreakdownItem {
+  flag: string;
+  label: string;
+  count: number;
+  level: "info" | "warning" | "critical";
+  action: string;
+}
+
+export interface BusinessRecommendedAction {
+  key: string;
+  label: string;
+  detail: string;
+  priority: number;
+  href: string;
+  tone: "primary" | "warning" | "success" | "neutral";
+}
+
+export interface BusinessOverview {
+  positioning: string;
+  primaryUseCases: string[];
+  evidenceCoverage: BusinessEvidenceCoverage;
+  reviewFunnel: BusinessReviewFunnel;
+  contentMix: BusinessContentMixItem[];
+  riskBreakdown: BusinessRiskBreakdownItem[];
+  recommendedActions: BusinessRecommendedAction[];
+  generatedAt: string;
+}
+
+export type CommercePlatform = "temu" | "tiktok_shop";
+
+export interface CommerceKpi {
+  key: string;
+  label: string;
+  value: number | string;
+  unit: string;
+  tone: "primary" | "warning" | "success" | "neutral";
+  detail: string;
+}
+
+export interface CommercePlatformSummary {
+  platform: CommercePlatform;
+  label: string;
+  totalListings: number;
+  readyListings: number;
+  watchListings: number;
+  missingListings: number;
+  readinessRate: number;
+  priorityAction: string;
+}
+
+export interface CommerceWarehouseSummary {
+  key: string;
+  name: string;
+  country: string;
+  platforms: CommercePlatform[];
+  totalSkus: number;
+  totalUnits: number;
+  reservedUnits: number;
+  lowStockSkus: number;
+  stockHealthRate: number;
+}
+
+export interface CommerceInventoryAlert {
+  productId: string;
+  productName: string;
+  sku: string;
+  warehouseKey: string;
+  warehouseName: string;
+  availableStock: number;
+  reservedStock: number;
+  safetyStock: number;
+  status: "healthy" | "low_stock" | "out_of_stock";
+  detail: string;
+  nextActionHref: string;
+}
+
+export interface CommerceHotProduct {
+  productId: string;
+  productName: string;
+  category: string;
+  sku: string;
+  heatScore: number;
+  heatLevel: "hot" | "rising" | "steady" | "needs_attention";
+  weeklySales: number;
+  rating: number;
+  reviewCount: number;
+  availableStock: number;
+  platforms: CommercePlatform[];
+  nextAction: string;
+}
+
+export interface CommerceOverview {
+  positioning: string;
+  operatingFocus: string[];
+  kpis: CommerceKpi[];
+  platforms: CommercePlatformSummary[];
+  warehouses: CommerceWarehouseSummary[];
+  inventoryAlerts: CommerceInventoryAlert[];
+  hotProducts: CommerceHotProduct[];
+  recommendedActions: BusinessRecommendedAction[];
+  generatedAt: string;
+}
+
+export interface LlmHealth {
+  status: "healthy" | "degraded" | "unavailable" | "unconfigured" | "skipped";
+  configured: boolean;
+  provider: string;
+  model: string;
+  baseUrl: string;
+  detail: string;
+  latencyMs?: number | null;
+}
+
+export interface ReadinessCheck {
+  key: string;
+  label: string;
+  status: "healthy" | "degraded" | "unavailable" | "unconfigured" | "skipped" | "enabled";
+  severity: "critical" | "warning";
+  detail: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SystemReadiness {
+  status: "healthy" | "degraded" | "unavailable";
+  environment: string;
+  time: string;
+  checks: ReadinessCheck[];
+}
+
 // Content type labels
 export const contentTypeLabels: Record<ContentType, string> = {
-  review_draft: "好评草稿",
+  review_draft: "口碑草稿",
   experience_copy: "使用体验",
   recommendation: "推荐语",
   review_invitation: "评价邀请",
@@ -276,6 +476,8 @@ export const platformLabels: Record<Platform, string> = {
   douyin: "抖音",
   xiaohongshu: "小红书",
   independent: "独立站",
+  temu: "Temu",
+  tiktok_shop: "TikTok Shop",
 };
 
 export const toneLabels: Record<Tone, string> = {

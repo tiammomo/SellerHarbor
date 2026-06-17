@@ -94,12 +94,11 @@ def _marketplace_rule(platform: str, label: str) -> PlatformRule:
         platform=platform,
         merchantType="marketplace_ecommerce",
         displayName=f"{label}电商",
-        objective="货架电商好评草稿，强调商品属性、真实体验和服务细节",
-        voice="自然、平实、有商品细节，适合货架电商评价区",
+        objective="货架电商口碑素材，强调商品属性、真实反馈、评价邀请和服务细节",
+        voice="自然、平实、有商品细节，避免冒充消费者或虚构购买经历",
         structure=["购买/使用场景", "商品属性", "体验细节", "物流/客服/售后"],
         positiveSignals=["SKU/规格", "真实使用细节", "物流包装", "客服售后边界"],
         avoidClaims=["刷评口吻", "无依据效果承诺", "绝对化排名", "虚构订单或回购"],
         riskTerms=["全网第一", "旗舰店唯一", "效果立竿见影", "永久有效"],
         maxShortRunes=105,
     )
-

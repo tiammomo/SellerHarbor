@@ -1,17 +1,47 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Card, Button, Form, Input, Select, Switch, Tabs, Message, Tag } from "@arco-design/web-react";
 import {
+  IconCheckCircle,
+  IconExclamationCircle,
+  IconRefresh,
   IconSettings,
   IconUser,
   IconSafe,
   IconNotification,
   IconStorage,
 } from "@arco-design/web-react/icon";
+import { apiClient } from "@/lib/api/client";
 import PageHeader from "@/components/common/PageHeader";
+import type { LlmHealth, SystemReadiness } from "@/lib/types";
 
 const FormItem = Form.Item;
 
 export default function SettingsPage() {
+  const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null);
+  const [readiness, setReadiness] = useState<SystemReadiness | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  const refreshHealth = async () => {
+    setHealthLoading(true);
+    try {
+      const [nextLlmHealth, nextReadiness] = await Promise.all([
+        apiClient.getLlmHealth(),
+        apiClient.getReadiness(),
+      ]);
+      setLlmHealth(nextLlmHealth);
+      setReadiness(nextReadiness);
+    } catch (error) {
+      Message.error(error instanceof Error ? error.message : "系统状态加载失败");
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshHealth();
+  }, []);
+
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
@@ -26,7 +56,7 @@ export default function SettingsPage() {
             <Form layout="vertical">
               <h3 className="text-base font-semibold mb-4" style={{ color: "var(--text-color-1)" }}>团队信息</h3>
               <FormItem label="团队名称">
-                <Input defaultValue="ReviewPilot 默认团队" />
+                <Input defaultValue="SellerHarbor 默认团队" />
               </FormItem>
               <FormItem label="默认生成语言">
                 <Select defaultValue="zh">
@@ -77,35 +107,57 @@ export default function SettingsPage() {
 
         <Tabs.TabPane key="model" title={<span className="flex items-center gap-1"><IconSafe /> 模型配置</span>}>
           <Card style={{ borderRadius: 16 }} className="mt-4">
-            <Form layout="vertical">
-              <h3 className="text-base font-semibold mb-4" style={{ color: "var(--text-color-1)" }}>LLM 配置</h3>
-              <FormItem label="模型提供商">
-                <Select defaultValue="openai">
-                  <Select.Option value="openai">OpenAI</Select.Option>
-                  <Select.Option value="anthropic">Anthropic</Select.Option>
-                  <Select.Option value="deepseek">DeepSeek</Select.Option>
-                  <Select.Option value="qwen">通义千问</Select.Option>
-                </Select>
-              </FormItem>
-              <FormItem label="API Key">
-                <Input.Password placeholder="sk-..." />
-              </FormItem>
-              <FormItem label="模型名称">
-                <Input defaultValue="gpt-4o" placeholder="例: gpt-4o, claude-3.5-sonnet" />
-              </FormItem>
-              <FormItem label="Temperature">
-                <Select defaultValue="0.7">
-                  <Select.Option value="0.3">0.3 (更稳定)</Select.Option>
-                  <Select.Option value="0.5">0.5</Select.Option>
-                  <Select.Option value="0.7">0.7 (推荐)</Select.Option>
-                  <Select.Option value="0.9">0.9 (更创意)</Select.Option>
-                </Select>
-              </FormItem>
-
-              <div className="flex justify-end mt-4">
-                <Button type="primary" onClick={() => Message.success("模型配置已保存（演示）")}>保存配置</Button>
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-base font-semibold" style={{ color: "var(--text-color-1)" }}>运行状态</h3>
+                <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>
+                  {readiness ? `环境: ${readiness.environment} · 更新时间: ${new Date(readiness.time).toLocaleString()}` : "正在读取系统状态"}
+                </div>
               </div>
-            </Form>
+              <Button icon={<IconRefresh />} loading={healthLoading} onClick={refreshHealth}>
+                刷新
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+              <StatusPanel label="系统" status={readiness?.status} detail={readiness?.status ? readiness.status : "loading"} />
+              <StatusPanel label="LLM 网关" status={llmHealth?.status} detail={llmHealth?.detail || "loading"} />
+              <StatusPanel
+                label="模型"
+                status={llmHealth?.configured ? "healthy" : "unconfigured"}
+                detail={llmHealth?.model || "未配置"}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+              <ConfigLine label="Provider" value={llmHealth?.provider || "-"} />
+              <ConfigLine label="Base URL" value={llmHealth?.baseUrl || "-"} />
+              <ConfigLine label="Latency" value={llmHealth?.latencyMs != null ? `${llmHealth.latencyMs} ms` : "-"} />
+              <ConfigLine label="Configured" value={llmHealth?.configured ? "true" : "false"} />
+            </div>
+
+            <div className="space-y-2">
+              {(readiness?.checks || []).map((check) => (
+                <div
+                  key={check.key}
+                  className="flex items-start justify-between gap-4 p-3 rounded-xl"
+                  style={{ backgroundColor: "var(--color-fill-1)" }}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {check.status === "healthy" ? (
+                        <IconCheckCircle style={{ color: "var(--color-success)" }} />
+                      ) : (
+                        <IconExclamationCircle style={{ color: check.severity === "critical" ? "var(--color-danger)" : "var(--color-warning)" }} />
+                      )}
+                      <span className="text-sm font-medium" style={{ color: "var(--text-color-1)" }}>{check.label}</span>
+                    </div>
+                    <div className="text-xs break-words" style={{ color: "var(--text-color-3)" }}>{check.detail}</div>
+                  </div>
+                  <Tag color={statusColor(check.status)}>{check.status}</Tag>
+                </div>
+              ))}
+            </div>
           </Card>
         </Tabs.TabPane>
 
@@ -170,7 +222,7 @@ export default function SettingsPage() {
                 <Input defaultValue="运营人员" />
               </FormItem>
               <FormItem label="邮箱">
-                <Input defaultValue="admin@reviewpilot.com" />
+                <Input defaultValue="admin@sellerharbor.local" />
               </FormItem>
               <FormItem label="角色">
                 <Tag color="blue" style={{ borderRadius: 8, padding: "4px 12px" }}>管理员</Tag>
@@ -185,4 +237,32 @@ export default function SettingsPage() {
       </Tabs>
     </div>
   );
+}
+
+function StatusPanel({ label, status, detail }: { label: string; status?: string; detail: string }) {
+  return (
+    <div className="p-4 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)" }}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-xs" style={{ color: "var(--text-color-3)" }}>{label}</span>
+        <Tag color={statusColor(status)}>{status || "loading"}</Tag>
+      </div>
+      <div className="text-sm font-medium break-words" style={{ color: "var(--text-color-1)" }}>{detail}</div>
+    </div>
+  );
+}
+
+function ConfigLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)" }}>
+      <span className="text-xs shrink-0" style={{ color: "var(--text-color-3)" }}>{label}</span>
+      <span className="text-sm text-right break-all" style={{ color: "var(--text-color-1)" }}>{value}</span>
+    </div>
+  );
+}
+
+function statusColor(status?: string) {
+  if (status === "healthy") return "green";
+  if (status === "degraded" || status === "skipped" || status === "enabled") return "orange";
+  if (status === "unavailable" || status === "unconfigured") return "red";
+  return "gray";
 }

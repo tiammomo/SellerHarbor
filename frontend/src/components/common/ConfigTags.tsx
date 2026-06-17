@@ -31,6 +31,8 @@ const platformColors: Record<Platform, string> = {
   douyin: "purple",
   xiaohongshu: "magenta",
   independent: "blue",
+  temu: "orange",
+  tiktok_shop: "purple",
 };
 
 export function ContentTypeTag({ type }: { type: ContentType }) {

@@ -64,9 +64,7 @@ export default function ProductsPage() {
     contents,
     productResearchProviders,
     productOpportunityReports,
-    marketIngestionRuns,
     createProduct,
-    ingestOpenFoodFacts,
   } = useDataStore();
   const [productForm] = Form.useForm();
   const [search, setSearch] = useState("");
@@ -78,7 +76,6 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<ProductResearchProvider | null>(null);
   const [addVisible, setAddVisible] = useState(false);
-  const [ingesting, setIngesting] = useState(false);
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category))], [products]);
   const providerById = useMemo(
@@ -125,7 +122,6 @@ export default function ProductsPage() {
   }, [insights, opportunityFilter, platformFilter, search, selectedCategory, sortKey]);
 
   const selectedInsight = selectedProduct ? insights.find((item) => item.product.id === selectedProduct.id) : undefined;
-  const latestIngestionRun = marketIngestionRuns[0];
 
   const openDetail = (product: Product) => {
     setSelectedProduct(product);
@@ -144,7 +140,7 @@ export default function ProductsPage() {
         usageScenarios: splitComma(values.usageScenarios),
         forbiddenClaims: splitComma(values.forbiddenClaims),
       });
-      Message.success("选品已入库");
+      Message.success("商品主档已保存");
       productForm.resetFields();
       setAddVisible(false);
     } catch (error) {
@@ -152,76 +148,27 @@ export default function ProductsPage() {
     }
   };
 
-  const handleOpenFoodFactsIngest = async () => {
-    setIngesting(true);
-    try {
-      const keyword = search.trim() || "coffee";
-      const run = await ingestOpenFoodFacts({ keyword, limit: 3, force: false });
-      if (run.status === "skipped") {
-        Message.info(run.message || "低频保护中，本次未重复采集");
-      } else if (run.status === "failed") {
-        Message.error(run.message || "采集失败");
-      } else {
-        Message.success(`已采集 ${run.createdCount} 个新选品，跳过 ${run.skippedCount} 个重复/无效项`);
-      }
-    } catch (error) {
-      Message.error(error instanceof Error ? error.message : "采集失败");
-    } finally {
-      setIngesting(false);
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto">
       <PageHeader
-        title="选品中心"
-        subtitle="评估商品机会、平台适配、反馈证据和可生成素材准备度"
+        title="商品主档"
+        subtitle="统一维护 SKU、平台 Listing、海外仓库存、卖点和素材准备度"
         icon={<IconApps />}
         extra={
           <div className="flex flex-wrap gap-2">
-            <Button loading={ingesting} onClick={handleOpenFoodFactsIngest}>
-              低频采集样本
-            </Button>
             <Button type="primary" icon={<IconPlus />} onClick={() => setAddVisible(true)}>
-              新增选品
+              新增商品主档
             </Button>
           </div>
         }
       />
 
       <Row gutter={16} className="mb-6">
-        <SummaryCard label="选品池" value={summary.total} tone="blue" />
-        <SummaryCard label="高机会" value={summary.high} tone="green" />
+        <SummaryCard label="商品主档" value={summary.total} tone="blue" />
+        <SummaryCard label="重点商品" value={summary.high} tone="green" />
         <SummaryCard label="有反馈依据" value={summary.evidenceReady} tone="cyan" />
-        <SummaryCard label="跨境报告" value={summary.externallyScored} tone="orange" />
+        <SummaryCard label="待补资料" value={summary.riskNeedsReview} tone="orange" />
       </Row>
-
-      <Card className="mb-6" style={{ borderRadius: 16 }}>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold m-0" style={{ color: "var(--text-color-1)" }}>跨境选品数据源策略</h3>
-              <p className="text-sm m-0 mt-1" style={{ color: "var(--text-color-3)" }}>
-                先用 Amazon 一方/三方工具做需求验证，再用 TikTok/广告工具做内容热度验证，最后补供应链和合规复核。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Tag color="blue">Provider 框架已就绪</Tag>
-              <Tag color="green">Open Food Facts 可自动采集</Tag>
-              {latestIngestionRun && (
-                <Tag color={latestIngestionRun.status === "failed" ? "red" : latestIngestionRun.status === "skipped" ? "orange" : "cyan"}>
-                  最近采集：{latestIngestionRun.createdCount} 新增
-                </Tag>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {productResearchProviders.slice(0, 6).map((provider) => (
-              <ProviderCard key={provider.id} provider={provider} onClick={() => setSelectedProvider(provider)} />
-            ))}
-          </div>
-        </div>
-      </Card>
 
       <Card className="mb-6" style={{ borderRadius: 16 }}>
         <div className="flex flex-wrap items-center gap-4">
@@ -256,7 +203,7 @@ export default function ProductsPage() {
           </Select>
           <div className="flex-1" />
           <span className="text-sm" style={{ color: "var(--text-color-3)" }}>
-            共 {filteredInsights.length} 个选品
+            共 {filteredInsights.length} 个商品
           </span>
         </div>
       </Card>
@@ -264,9 +211,9 @@ export default function ProductsPage() {
       {filteredInsights.length === 0 ? (
         <EmptyState
           icon="📦"
-          title="暂无匹配选品"
+          title="暂无匹配商品"
           description="补充商品资料、反馈依据后即可开始生成口碑内容"
-          actionText="新增选品"
+          actionText="新增商品"
           onAction={() => setAddVisible(true)}
         />
       ) : (
@@ -339,7 +286,7 @@ export default function ProductsPage() {
                       router.push(`/generate?productId=${item.product.id}`);
                     }}
                   >
-                    生成好评 <IconRight />
+                    生成素材 <IconRight />
                   </Button>
                   <Button type="text" size="small" onClick={(event) => { event.stopPropagation(); openDetail(item.product); }}>
                     诊断
@@ -352,7 +299,7 @@ export default function ProductsPage() {
       )}
 
       <Modal
-        title="选品诊断"
+        title="商品诊断"
         visible={detailVisible}
         onCancel={() => setDetailVisible(false)}
         footer={null}
@@ -385,68 +332,57 @@ export default function ProductsPage() {
               <MiniMetric label="已通过" value={`${selectedInsight.approvedCount} 条`} />
             </div>
 
-            <DiagnosticBlock title="跨境工具验证">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-xl p-3" style={{ backgroundColor: "var(--color-fill-1)" }}>
-                  <div className="text-xs mb-2" style={{ color: "var(--text-color-3)" }}>建议数据源</div>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedInsight.recommendedProviderIds.map((providerId) => {
-                      const provider = providerById.get(providerId);
-                      return (
-                        <Tag
-                          key={providerId}
-                          color="blue"
-                          className="cursor-pointer"
-                          onClick={() => provider && setSelectedProvider(provider)}
-                        >
-                          {provider?.name || providerId}
-                        </Tag>
-                      );
-                    })}
-                    {selectedInsight.recommendedProviderIds.length === 0 && <Tag color="orange">待配置数据源</Tag>}
+            {selectedInsight.report && (
+              <>
+                <DiagnosticBlock title="外部验证">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-xl p-3" style={{ backgroundColor: "var(--color-fill-1)" }}>
+                      <div className="text-xs mb-2" style={{ color: "var(--text-color-3)" }}>建议数据源</div>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedInsight.recommendedProviderIds.map((providerId) => {
+                          const provider = providerById.get(providerId);
+                          return (
+                            <Tag
+                              key={providerId}
+                              color="blue"
+                              className="cursor-pointer"
+                              onClick={() => provider && setSelectedProvider(provider)}
+                            >
+                              {provider?.name || providerId}
+                            </Tag>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="rounded-xl p-3" style={{ backgroundColor: "var(--color-fill-1)" }}>
+                      <div className="text-xs mb-2" style={{ color: "var(--text-color-3)" }}>验证状态</div>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedInsight.report.checks.map((check) => (
+                          <Tag key={check.key} color={check.status === "passed" ? "green" : check.status === "missing" ? "orange" : "gold"}>
+                            {check.label}
+                          </Tag>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="rounded-xl p-3" style={{ backgroundColor: "var(--color-fill-1)" }}>
-                  <div className="text-xs mb-2" style={{ color: "var(--text-color-3)" }}>验证状态</div>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedInsight.report?.checks.map((check) => (
-                      <Tag key={check.key} color={check.status === "passed" ? "green" : check.status === "missing" ? "orange" : "gold"}>
-                        {check.label}
-                      </Tag>
+                </DiagnosticBlock>
+
+                <DiagnosticBlock title="数据来源贡献">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {selectedInsight.marketSources.slice(0, 6).map((source) => (
+                      <MarketSourceCard
+                        key={source.providerId}
+                        source={source}
+                        onClick={() => {
+                          const provider = providerById.get(source.providerId);
+                          if (provider) setSelectedProvider(provider);
+                        }}
+                      />
                     ))}
-                    {!selectedInsight.report && <Tag color="orange">等待后端报告</Tag>}
                   </div>
-                </div>
-              </div>
-            </DiagnosticBlock>
-
-            <DiagnosticBlock title="数据来源贡献">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {selectedInsight.marketSources.slice(0, 6).map((source) => (
-                  <MarketSourceCard
-                    key={source.providerId}
-                    source={source}
-                    onClick={() => {
-                      const provider = providerById.get(source.providerId);
-                      if (provider) setSelectedProvider(provider);
-                    }}
-                  />
-                ))}
-              </div>
-            </DiagnosticBlock>
-
-            <DiagnosticBlock title="采集链路">
-              <div className="grid grid-cols-1 gap-2">
-                {selectedInsight.collectionPlan.map((step) => (
-                  <CollectionStepCard
-                    key={step.key}
-                    step={step}
-                    providerById={providerById}
-                    onProviderClick={(provider) => setSelectedProvider(provider)}
-                  />
-                ))}
-              </div>
-            </DiagnosticBlock>
+                </DiagnosticBlock>
+              </>
+            )}
 
             {selectedInsight.report && (
               <DiagnosticBlock title="机会信号">
@@ -516,7 +452,7 @@ export default function ProductsPage() {
 
             <div className="flex gap-3 pt-4 border-t" style={{ borderColor: "var(--border-color-light)" }}>
               <Button type="primary" onClick={() => { setDetailVisible(false); router.push(`/generate?productId=${selectedProduct.id}`); }}>
-                生成好评内容
+                生成口碑素材
               </Button>
               <Button onClick={() => { setDetailVisible(false); router.push(`/feedback?productId=${selectedProduct.id}`); }}>
                 补充反馈依据
@@ -528,7 +464,7 @@ export default function ProductsPage() {
       </Modal>
 
       <Modal
-        title="新增选品"
+        title="新增商品"
         visible={addVisible}
         onCancel={() => setAddVisible(false)}
         onOk={handleCreateProduct}
@@ -562,7 +498,7 @@ export default function ProductsPage() {
             <Col span={10}>
               <FormItem label="数据来源" field="sourceName">
                 <Select placeholder="选择来源" allowClear>
-                  {["人工录入", "eBay", "Amazon Best Sellers", "Best Buy", "Etsy", "Open Food Facts", "TikTok Creative Center", "供应链/1688", "店铺后台"].map((source) => (
+                  {["人工录入", "Temu Seller Center", "TikTok Shop Seller Center", "海外仓表格", "供应链/1688", "店铺后台", "CSV导入"].map((source) => (
                     <Select.Option key={source} value={source}>{source}</Select.Option>
                   ))}
                 </Select>
@@ -1015,16 +951,19 @@ function productGaps(product: Product, feedbackCount: number, avgScore: number, 
 }
 
 function nextAction(level: ProductInsight["level"], feedbackCount: number, approvedCount: number, riskCount: number): string {
-  if (feedbackCount === 0) return "先录入客户反馈，避免生成缺依据的一人称好评";
-  if (riskCount > 0) return "先复核风险素材，再沉淀可复用好评";
-  if (approvedCount === 0) return "生成首批好评草稿，建立商品口碑素材";
-  if (level === "high") return "适合扩展多平台、多风格好评素材";
+  if (feedbackCount === 0) return "先录入客户反馈，避免生成缺依据的一人称体验内容";
+  if (riskCount > 0) return "先复核风险素材，再沉淀可复用口碑表达";
+  if (approvedCount === 0) return "生成首批评价邀请、推荐语或详情页口碑素材";
+  if (level === "high") return "适合扩展多平台、多风格口碑素材";
   return "继续补充反馈并观察生成质量";
 }
 
 function recommendedPlatforms(product: Product): Platform[] {
   const explicit = parsePlatforms(product.attributes["主推平台"]);
   if (explicit.length > 0) return explicit;
+  const commerceExplicit = parsePlatforms(product.attributes["platforms"] || product.attributes["目标平台"]);
+  if (commerceExplicit.length > 0) return commerceExplicit;
+  if (product.attributes.temuStatus || product.attributes.tiktokStatus) return ["temu", "tiktok_shop"];
   if (product.category.includes("食品") || product.category.includes("美妆")) return ["xiaohongshu", "douyin", "taobao"];
   if (product.category.includes("母婴")) return ["xiaohongshu", "taobao", "jd"];
   if (product.category.includes("厨房") || product.category.includes("家居")) return ["taobao", "douyin", "pdd"];
@@ -1043,6 +982,13 @@ function parsePlatforms(value?: string): Platform[] {
     抖音: "douyin",
     小红书: "xiaohongshu",
     独立站: "independent",
+    Temu: "temu",
+    temu: "temu",
+    TikTok: "tiktok_shop",
+    "TikTok Shop": "tiktok_shop",
+    tiktok: "tiktok_shop",
+    tiktok_shop: "tiktok_shop",
+    tiktokshop: "tiktok_shop",
     taobao: "taobao",
     tmall: "tmall",
     jd: "jd",

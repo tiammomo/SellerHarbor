@@ -81,7 +81,7 @@ export default function Header() {
             <div className="py-1" style={{ minWidth: 160 }}>
               <div className="px-4 py-2 border-b" style={{ borderColor: "var(--border-color)" }}>
                 <div className="font-medium" style={{ color: "var(--text-color-1)" }}>运营人员</div>
-                <div className="text-xs" style={{ color: "var(--text-color-3)" }}>admin@reviewpilot.com</div>
+                <div className="text-xs" style={{ color: "var(--text-color-3)" }}>admin@sellerharbor.local</div>
               </div>
               <div
                 className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"

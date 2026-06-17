@@ -68,8 +68,8 @@ const react19ArcoConsoleGuardScript = `
 `;
 
 export const metadata: Metadata = {
-  title: "ReviewPilot - 口碑内容助手",
-  description: "面向线上商家的口碑内容生成工具，基于真实信息生成可审核的好评草稿和推荐文案",
+  title: "SellerHarbor - 跨境卖家商品运营港",
+  description: "面向 Temu、TikTok Shop 等跨境卖家的商品主数据、上架素材、海外仓库存、好评与热款追踪工作台",
 };
 
 export default function RootLayout({

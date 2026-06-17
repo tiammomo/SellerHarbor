@@ -8,11 +8,13 @@ import {
   IconRight,
   IconCheckCircle,
   IconInfoCircle,
+  IconRefresh,
 } from "@arco-design/web-react/icon";
 import { useRouter } from "next/navigation";
 import { useDataStore } from "@/lib/stores/dataStore";
 import PageHeader from "@/components/common/PageHeader";
 import EmptyState from "@/components/common/EmptyState";
+import { contentTypeLabels, type FeedbackOrganization } from "@/lib/types";
 
 const { Row, Col } = Grid;
 const FormItem = Form.Item;
@@ -26,11 +28,14 @@ const sourceTypeLabels: Record<string, { label: string; color: string; icon: str
 
 export default function FeedbackPage() {
   const router = useRouter();
-  const { feedbacks, products, createFeedback } = useDataStore();
+  const { feedbacks, products, organizeFeedback, createFeedback } = useDataStore();
   const [feedbackForm] = Form.useForm();
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState<string | undefined>();
   const [addVisible, setAddVisible] = useState(false);
+  const [rawFeedbackText, setRawFeedbackText] = useState("");
+  const [organizing, setOrganizing] = useState(false);
+  const [organization, setOrganization] = useState<FeedbackOrganization | null>(null);
 
   useEffect(() => {
     const productId = new URLSearchParams(window.location.search).get("productId") || undefined;
@@ -61,11 +66,53 @@ export default function FeedbackPage() {
       });
       Message.success("反馈已录入");
       feedbackForm.resetFields();
+      setRawFeedbackText("");
+      setOrganization(null);
       setAddVisible(false);
     } catch (error) {
       if (error instanceof Error) {
         Message.error(error.message);
       }
+    }
+  };
+
+  const handleOpenAdd = () => {
+    setOrganization(null);
+    setRawFeedbackText("");
+    setAddVisible(true);
+  };
+
+  const handleOrganizeFeedback = async () => {
+    const values = feedbackForm.getFieldsValue();
+    const productId = values.productId;
+    const rawText = rawFeedbackText.trim() || values.sourceSummary?.trim();
+    if (!productId) {
+      Message.warning("请先选择商品");
+      return;
+    }
+    if (!rawText) {
+      Message.warning("请先粘贴原始反馈");
+      return;
+    }
+    setOrganizing(true);
+    try {
+      const result = await organizeFeedback({
+        productId,
+        rawText,
+        sourceType: values.sourceType || "customer_review",
+        consentStatus: values.consentStatus || "confirmed",
+      });
+      setOrganization(result);
+      feedbackForm.setFieldValue("sourceSummary", result.sourceSummary);
+      feedbackForm.setFieldValue("confirmedFacts", result.confirmedFacts.join("\n"));
+      feedbackForm.setFieldValue("subjectiveOpinions", result.subjectiveOpinions.join("\n"));
+      feedbackForm.setFieldValue("sourceType", result.sourceType);
+      feedbackForm.setFieldValue("consentStatus", result.consentStatus);
+      Message.success("已完成反馈整理");
+    } catch (error) {
+      Message.error(error instanceof Error ? error.message : "整理失败");
+    } finally {
+      setOrganizing(false);
     }
   };
 
@@ -76,7 +123,7 @@ export default function FeedbackPage() {
         subtitle="管理客户授权反馈、客服回访摘要和售后记录"
         icon={<IconMessage />}
         extra={
-          <Button type="primary" icon={<IconPlus />} onClick={() => setAddVisible(true)}>
+          <Button type="primary" icon={<IconPlus />} onClick={handleOpenAdd}>
             录入反馈
           </Button>
         }
@@ -117,7 +164,7 @@ export default function FeedbackPage() {
           title="暂无反馈"
           description="录入客户反馈后可以作为生成内容的真实依据"
           actionText="录入反馈"
-          onAction={() => setAddVisible(true)}
+          onAction={handleOpenAdd}
         />
       ) : (
         <div className="space-y-4">
@@ -240,8 +287,66 @@ export default function FeedbackPage() {
               <Select.Option value="not_required">不需要授权</Select.Option>
             </Select>
           </FormItem>
+          <FormItem label="原始反馈">
+            <Input.TextArea
+              placeholder="粘贴客户原话、客服回访记录或售后摘要，点击整理后会自动提取事实和主观感受..."
+              rows={4}
+              value={rawFeedbackText}
+              onChange={setRawFeedbackText}
+            />
+            <div className="mt-3 flex items-center gap-2">
+              <Button icon={<IconRefresh />} loading={organizing} onClick={handleOrganizeFeedback}>
+                一键整理
+              </Button>
+              <span className="text-xs" style={{ color: "var(--text-color-3)" }}>
+                整理不会自动入库，确认后再保存。
+              </span>
+            </div>
+          </FormItem>
+
+          {organization && (
+            <div className="mb-4 rounded-xl border p-4" style={{ borderColor: "var(--border-color-light)", backgroundColor: "var(--color-fill-1)" }}>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-semibold" style={{ color: "var(--text-color-1)" }}>整理结果</span>
+                <Tag color={organization.readinessScore >= 75 ? "green" : organization.readinessScore >= 55 ? "orange" : "red"}>
+                  准备度 {organization.readinessScore}
+                </Tag>
+              </div>
+              <OrganizationTags title="推荐用途" items={organization.recommendedContentTypes.map((type) => contentTypeLabels[type] || type)} color="blue" />
+              <OrganizationTags title="风险标记" items={organization.riskFlags} color="red" emptyText="未发现明显风险" />
+              <OrganizationTags title="不确定表达" items={organization.uncertainClaims} color="orange" emptyText="无" />
+              <div className="mt-3 space-y-1">
+                {organization.nextActions.map((action) => (
+                  <div key={action} className="text-xs" style={{ color: "var(--text-color-3)" }}>
+                    {action}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Form>
       </Modal>
+    </div>
+  );
+}
+
+function OrganizationTags({
+  title,
+  items,
+  color,
+  emptyText = "无",
+}: {
+  title: string;
+  items: string[];
+  color: string;
+  emptyText?: string;
+}) {
+  return (
+    <div className="mb-2">
+      <div className="mb-1 text-xs" style={{ color: "var(--text-color-3)" }}>{title}</div>
+      <div className="flex flex-wrap gap-1">
+        {items.length > 0 ? items.map((item) => <Tag key={item} color={color}>{item}</Tag>) : <Tag>{emptyText}</Tag>}
+      </div>
     </div>
   );
 }

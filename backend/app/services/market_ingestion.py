@@ -86,7 +86,7 @@ async def _search_open_food_facts(*, keyword: str, limit: int) -> list[dict[str,
     category_tag = _category_tag_for_keyword(keyword)
     if category_tag:
         params["categories_tags"] = category_tag
-    headers = {"User-Agent": "ReviewPilot/0.1 product-sourcing-demo"}
+    headers = {"User-Agent": "SellerHarbor/0.1 product-sourcing-demo"}
     async with httpx.AsyncClient(timeout=20, headers=headers, follow_redirects=True) as client:
         response = await client.get(OPEN_FOOD_FACTS_SEARCH_URL, params=params)
         response.raise_for_status()
@@ -257,7 +257,7 @@ async def _store_image_asset(*, source_image_url: str, keyword: str, source_prod
         }
 
     try:
-        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": "ReviewPilot/0.1 image-ingestion"}, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": "SellerHarbor/0.1 image-ingestion"}, follow_redirects=True) as client:
             response = await client.get(source_image_url)
             response.raise_for_status()
             content_type = response.headers.get("content-type", "")

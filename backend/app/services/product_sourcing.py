@@ -388,7 +388,7 @@ def build_opportunity_report(
             "内容传播适配",
             f"{round(content_fit)} / 100",
             round(content_fit),
-            "provider.tiktok_creative_center|reviewpilot.generated_content",
+            "provider.tiktok_creative_center|sellerharbor.generated_content",
             0.20,
             "结合使用场景、已生成内容质量和可复用素材沉淀估算。",
         ),
@@ -397,9 +397,9 @@ def build_opportunity_report(
             "真实反馈证据",
             f"{len(feedbacks)} 条",
             evidence,
-            "reviewpilot.feedback",
+            "sellerharbor.feedback",
             0.18,
-            "好评生成需要真实反馈支撑，反馈越多越适合扩展多平台口碑素材。",
+            "口碑素材生成需要真实反馈支撑，反馈越多越适合扩展多平台内容。",
         ),
         _signal(
             "differentiation",
@@ -454,9 +454,9 @@ def build_opportunity_report(
         nextActions=_next_actions(level, providers, checks, risk_flags),
         riskFlags=risk_flags,
         sourceTrace=[
-            "reviewpilot.product",
-            "reviewpilot.feedback",
-            "reviewpilot.generated_content",
+            "sellerharbor.product",
+            "sellerharbor.feedback",
+            "sellerharbor.generated_content",
             *[f"provider.{provider_id}" for provider_id in providers],
         ],
     )
@@ -610,7 +610,7 @@ def _collection_plan(product: Product, providers: list[str], visual: ProductVisu
             label="人工录入基础证据",
             mode="manual_input",
             priority=1,
-            providerIds=["reviewpilot.product"],
+            providerIds=["sellerharbor.product"],
             expectedFields=["商品图", "来源链接", "价格", "币种", "竞品差异", "库存状态"],
             qualityImpact="先补真实商品图和来源链接，能显著提升图片可信度和报告置信度。",
             automationHint="适合商家先把已有店铺链接、1688/供应链链接或竞品 URL 填进来。",
@@ -690,14 +690,14 @@ def _validation_checks(
             "商品资料完整",
             "passed" if _completeness(product) >= 75 else "watch",
             "卖点、人群、场景、禁用表达会影响自动生成质量。",
-            "reviewpilot.product",
+            "sellerharbor.product",
         ),
         _check(
             "review_evidence",
             "真实反馈证据",
             "passed" if feedbacks else "missing",
-            "至少需要 1 条真实反馈，才能安全生成第一人称好评。",
-            "reviewpilot.feedback",
+            "至少需要 1 条真实反馈，才能安全生成第一人称体验内容。",
+            "sellerharbor.feedback",
         ),
         _check(
             "amazon_keyword_validation",
@@ -725,7 +725,7 @@ def _validation_checks(
             "已沉淀可用口碑",
             "passed" if any(content.reviewStatus == "approved" for content in contents) else "watch",
             "通过审核的内容越多，越适合进入批量生成和多平台改写。",
-            "reviewpilot.generated_content",
+            "sellerharbor.generated_content",
         ),
     ]
     return checks
@@ -873,7 +873,7 @@ def _next_actions(level: str, providers: list[str], checks: list[ProductValidati
     if "minea" in providers:
         actions.append("用 Minea 或 Dropship.io 看独立站广告素材和竞品店铺走势。")
     if risk_flags:
-        actions.append("先完成合规词、禁用表达和评价证据复核，再批量生成好评。")
+        actions.append("先完成合规词、禁用表达和评价证据复核，再批量生成口碑素材。")
     if level == "launch_candidate":
         actions.append("可以进入小批量内容生成与多平台素材 A/B 验证。")
     return _unique(actions[:5])

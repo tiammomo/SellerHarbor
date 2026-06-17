@@ -31,16 +31,16 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    label: "选品功能",
+    label: "商品运营",
     items: [
-      { key: "/products", label: "选品中心", icon: <IconArrowRise /> },
-      { key: "/feedback", label: "反馈录入", icon: <IconMessage /> },
+      { key: "/products", label: "商品主档", icon: <IconArrowRise /> },
+      { key: "/feedback", label: "评价反馈", icon: <IconMessage /> },
     ],
   },
   {
-    label: "好评功能",
+    label: "口碑运营",
     items: [
-      { key: "/generate", label: "好评工作台", icon: <IconThumbUp /> },
+      { key: "/generate", label: "生成工作台", icon: <IconThumbUp /> },
       { key: "/review", label: "审核中心", icon: <IconCheckCircle /> },
       { key: "/history", label: "生成记录", icon: <IconFile /> },
     ],
@@ -130,11 +130,11 @@ export default function Sidebar() {
               className="w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold text-white shadow-sm"
               style={{ background: "linear-gradient(135deg, #f97316 0%, #f59e0b 58%, #d97706 100%)" }}
             >
-              R
+              S
             </div>
             <div>
-              <div className="font-bold text-lg" style={{ color: "var(--text-color-1)" }}>ReviewPilot</div>
-              <div className="text-xs" style={{ color: "var(--text-color-3)" }}>口碑内容助手</div>
+              <div className="font-bold text-lg" style={{ color: "var(--text-color-1)" }}>SellerHarbor</div>
+              <div className="text-xs" style={{ color: "var(--text-color-3)" }}>跨境卖家港</div>
             </div>
           </div>
         )}
@@ -143,7 +143,7 @@ export default function Sidebar() {
             className="w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold text-white mx-auto shadow-sm"
             style={{ background: "linear-gradient(135deg, #f97316 0%, #f59e0b 58%, #d97706 100%)" }}
           >
-            R
+            S
           </div>
         )}
       </div>
@@ -248,7 +248,7 @@ export default function Sidebar() {
             <Avatar size={36} style={{ backgroundColor: "#f97316", borderRadius: 12 }}>👤</Avatar>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm truncate" style={{ color: "var(--text-color-1)" }}>运营人员</div>
-              <div className="text-xs truncate" style={{ color: "var(--text-color-3)" }}>admin@reviewpilot.com</div>
+              <div className="text-xs truncate" style={{ color: "var(--text-color-3)" }}>admin@sellerharbor.local</div>
             </div>
           </div>
         </div>

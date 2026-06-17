@@ -1,8 +1,15 @@
 import { create } from "zustand";
-import { apiClient, type CreateFeedbackPayload, type CreateProductPayload, type IngestOpenFoodFactsPayload } from "@/lib/api/client";
+import {
+  apiClient,
+  type CreateFeedbackPayload,
+  type CreateProductPayload,
+  type IngestOpenFoodFactsPayload,
+  type OrganizeFeedbackPayload,
+} from "@/lib/api/client";
 import type {
   Product,
   Feedback,
+  FeedbackOrganization,
   GenerationTask,
   GeneratedContent,
   DashboardStats,
@@ -11,6 +18,8 @@ import type {
   ProductOpportunityReport,
   ProductResearchProvider,
   PlatformRule,
+  BusinessOverview,
+  CommerceOverview,
 } from "@/lib/types";
 
 const emptyDashboardStats: DashboardStats = {
@@ -24,12 +33,51 @@ const emptyDashboardStats: DashboardStats = {
   weeklyGenerations: [0, 0, 0, 0, 0, 0, 0],
 };
 
+const emptyBusinessOverview: BusinessOverview = {
+  positioning: "内容与评价运营助手",
+  primaryUseCases: ["评价邀请", "客服回访", "商品推荐语", "详情页口碑描述"],
+  evidenceCoverage: {
+    totalProducts: 0,
+    productsWithUsableFeedback: 0,
+    productsWithoutUsableFeedback: 0,
+    readyProducts: 0,
+    coverageRate: 0,
+    gaps: [],
+  },
+  reviewFunnel: {
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    rewriting: 0,
+    exportable: 0,
+    approvalRate: 0,
+  },
+  contentMix: [],
+  riskBreakdown: [],
+  recommendedActions: [],
+  generatedAt: "",
+};
+
+const emptyCommerceOverview: CommerceOverview = {
+  positioning: "SellerHarbor 跨境卖家商品运营港",
+  operatingFocus: ["商品主数据收口", "Temu / TikTok Shop 上架管理", "海外仓库存分配", "好评与热款追踪"],
+  kpis: [],
+  platforms: [],
+  warehouses: [],
+  inventoryAlerts: [],
+  hotProducts: [],
+  recommendedActions: [],
+  generatedAt: "",
+};
+
 interface DataState {
   products: Product[];
   feedbacks: Feedback[];
   tasks: GenerationTask[];
   contents: GeneratedContent[];
   dashboardStats: DashboardStats;
+  businessOverview: BusinessOverview;
+  commerceOverview: CommerceOverview;
   platformRules: PlatformRule[];
   productResearchProviders: ProductResearchProvider[];
   productOpportunityReports: ProductOpportunityReport[];
@@ -40,8 +88,11 @@ interface DataState {
   initialize: () => Promise<void>;
   refreshAll: () => Promise<void>;
   createProduct: (product: CreateProductPayload) => Promise<Product>;
+  organizeFeedback: (feedback: OrganizeFeedbackPayload) => Promise<FeedbackOrganization>;
   createFeedback: (feedback: CreateFeedbackPayload) => Promise<Feedback>;
   createGeneration: (config: GenerationConfig) => Promise<GenerationTask>;
+  createGenerationJob: (config: GenerationConfig) => Promise<GenerationTask>;
+  getGenerationTask: (taskId: string) => Promise<GenerationTask>;
   ingestOpenFoodFacts: (payload: IngestOpenFoodFactsPayload) => Promise<MarketIngestionRun>;
   updateContentReview: (contentId: string, status: GeneratedContent["reviewStatus"]) => Promise<GeneratedContent>;
   getProducts: () => Product[];
@@ -56,6 +107,8 @@ export const useDataStore = create<DataState>((set, get) => ({
   tasks: [],
   contents: [],
   dashboardStats: emptyDashboardStats,
+  businessOverview: emptyBusinessOverview,
+  commerceOverview: emptyCommerceOverview,
   platformRules: [],
   productResearchProviders: [],
   productOpportunityReports: [],
@@ -77,20 +130,18 @@ export const useDataStore = create<DataState>((set, get) => ({
         tasks,
         contents,
         dashboardStats,
+        businessOverview,
+        commerceOverview,
         platformRules,
-        productResearchProviders,
-        productOpportunityReports,
-        marketIngestionRuns,
       ] = await Promise.all([
         apiClient.getProducts(),
         apiClient.getFeedbacks(),
         apiClient.getTasks(),
         apiClient.getContents(),
         apiClient.getDashboard(),
+        apiClient.getBusinessOverview(),
+        apiClient.getCommerceOverview(),
         apiClient.getPlatformRules(),
-        apiClient.getProductResearchProviders(),
-        apiClient.getProductOpportunityReports(),
-        apiClient.getMarketIngestionRuns(),
       ]);
 
       set({
@@ -99,10 +150,9 @@ export const useDataStore = create<DataState>((set, get) => ({
         tasks,
         contents,
         dashboardStats,
+        businessOverview,
+        commerceOverview,
         platformRules,
-        productResearchProviders,
-        productOpportunityReports,
-        marketIngestionRuns,
         loading: false,
         initialized: true,
       });
@@ -127,6 +177,8 @@ export const useDataStore = create<DataState>((set, get) => ({
     void get().refreshAll();
     return product;
   },
+
+  organizeFeedback: async (payload) => apiClient.organizeFeedback(payload),
 
   createFeedback: async (payload) => {
     const feedback = await apiClient.createFeedback(payload);
@@ -156,6 +208,39 @@ export const useDataStore = create<DataState>((set, get) => ({
       },
     }));
     void get().refreshAll();
+    return task;
+  },
+
+  createGenerationJob: async (config) => {
+    const task = await apiClient.createGenerationJob(config);
+    set((state) => ({
+      tasks: [task, ...state.tasks.filter((item) => item.id !== task.id)],
+    }));
+    return task;
+  },
+
+  getGenerationTask: async (taskId) => {
+    const task = await apiClient.getGenerationTask(taskId);
+    const newContents = task.contents || [];
+    set((state) => ({
+      tasks: [task, ...state.tasks.filter((item) => item.id !== task.id)],
+      contents:
+        task.status === "completed"
+          ? [...newContents, ...state.contents.filter((content) => content.taskId !== task.id)]
+          : state.contents,
+      dashboardStats:
+        task.status === "completed"
+          ? {
+              ...state.dashboardStats,
+              totalGenerations: Math.max(state.dashboardStats.totalGenerations, state.contents.length + newContents.length),
+              pendingReviews: Math.max(
+                state.dashboardStats.pendingReviews,
+                newContents.filter((content) => content.reviewStatus === "pending").length
+              ),
+            }
+          : state.dashboardStats,
+    }));
+    if (task.status === "completed") void get().refreshAll();
     return task;
   },
 

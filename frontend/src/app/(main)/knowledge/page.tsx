@@ -111,7 +111,7 @@ export default function KnowledgePage() {
           <Card className="mt-4" style={{ borderRadius: 16 }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold m-0" style={{ color: "var(--text-color-1)" }}>
-                高频好评话术
+                高频口碑话术
               </h3>
               <Button type="primary" size="small" icon={<IconPlus />}>添加话术</Button>
             </div>

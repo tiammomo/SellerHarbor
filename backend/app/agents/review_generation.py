@@ -168,7 +168,7 @@ async def _safe_alternative(state: GenerationState) -> GenerationState:
 
 
 async def _generate_drafts(state: GenerationState) -> GenerationState:
-    system = """你是 ReviewPilot 的合规口碑内容生成器。
+    system = """你是 SellerHarbor 的合规口碑内容生成器。
 你必须基于商品资料、真实反馈和平台规则生成可审核草稿。
 不要编造真实消费者身份、订单、物流、疗效、收益、排名或未提供的使用经历。
 qualityReport 中 repetitionRisk 和 exaggerationRisk 的含义是风险分，0 代表低风险，100 代表高风险。
@@ -216,7 +216,7 @@ qualityReport 中 repetitionRisk 和 exaggerationRisk 的含义是风险分，0 
 
 
 async def _rewrite_drafts(state: GenerationState) -> GenerationState:
-    system = """你是 ReviewPilot 的合规重写器。
+    system = """你是 SellerHarbor 的合规重写器。
 你只负责修正已有候选文案中的风险和低质量问题，不新增未经提供的事实。
 重写后必须更克制、更具体、更符合平台规则。
 qualityReport 中 repetitionRisk 和 exaggerationRisk 的含义是风险分，0 代表低风险，100 代表高风险。
@@ -361,13 +361,13 @@ def _safe_alternative_text(product: Product, rule: dict[str, Any], blocking_flag
     platform_name = rule.get("displayName") or rule.get("platform") or "目标平台"
     if "missing_feedback_context" in blocking_flags:
         return (
-            f"当前缺少已确认客户反馈，不建议直接生成第一人称好评草稿。"
+            f"当前缺少已确认客户反馈，不建议直接生成第一人称体验内容。"
             f"可以先用于{platform_name}的评价邀请：如果你体验过 {product.name} 的{selling_points}，"
             "欢迎结合真实使用场景留下感受，我们会根据反馈继续优化商品和服务。"
         )
     if "merchant_voice_review_risk" in blocking_flags:
         return (
-            f"商家口吻不适合伪装成用户好评。可以改为商家侧说明：{product.name}主打{selling_points}，"
+            f"商家口吻不适合伪装成用户体验。可以改为商家侧说明：{product.name}主打{selling_points}，"
             "建议用户结合真实体验分享使用场景和具体感受，避免夸大效果或替用户下结论。"
         )
     return (

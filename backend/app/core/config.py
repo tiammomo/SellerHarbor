@@ -13,6 +13,7 @@ class LLMSettings:
     api_key: str
     model: str
     timeout_seconds: float
+    connect_timeout_seconds: float
 
     @property
     def configured(self) -> bool:
@@ -35,9 +36,19 @@ class ObjectStorageSettings:
 
 @dataclass(frozen=True)
 class Settings:
+    environment: str
     port: int
     db_path: Path
     seed_demo: bool
+    cors_allow_origins: list[str]
+    default_tenant_id: str
+    allowed_tenant_ids: list[str]
+    auth_required: bool
+    api_keys: list[str]
+    rate_limit_enabled: bool
+    requests_per_minute: int
+    generation_jobs_per_minute: int
+    generation_task_timeout_seconds: int
     llm: LLMSettings
     object_storage: ObjectStorageSettings
 
@@ -45,44 +56,60 @@ class Settings:
 def load_settings() -> Settings:
     claude = _read_claude_code_settings()
     env = claude.get("env", {})
-    port = int(_first(os.getenv("REVIEWPILOT_PORT"), "38081"))
+    environment = _first(os.getenv("SELLERHARBOR_ENV"), "development").lower()
+    port = int(_first(os.getenv("SELLERHARBOR_PORT"), "38081"))
 
     model = _first(
-        os.getenv("REVIEWPILOT_LLM_MODEL"),
+        os.getenv("SELLERHARBOR_LLM_MODEL"),
         os.getenv("ANTHROPIC_MODEL"),
         env.get("ANTHROPIC_MODEL"),
         claude.get("selected_model"),
         _read_claude_model(),
         "mimo-v2.5-pro",
     )
-    base_url = _first(os.getenv("REVIEWPILOT_LLM_BASE_URL"), os.getenv("ANTHROPIC_BASE_URL"), env.get("ANTHROPIC_BASE_URL"))
+    base_url = _first(
+        os.getenv("SELLERHARBOR_LLM_BASE_URL"),
+        os.getenv("ANTHROPIC_BASE_URL"),
+        env.get("ANTHROPIC_BASE_URL"),
+    )
     api_key = _first(
-        os.getenv("REVIEWPILOT_LLM_API_KEY"),
+        os.getenv("SELLERHARBOR_LLM_API_KEY"),
         os.getenv("ANTHROPIC_AUTH_TOKEN"),
         os.getenv("ANTHROPIC_API_KEY"),
         env.get("ANTHROPIC_AUTH_TOKEN"),
         env.get("ANTHROPIC_API_KEY"),
     )
-    provider = _first(os.getenv("REVIEWPILOT_LLM_PROVIDER"), "anthropic" if base_url else "anthropic")
+    provider = _first(os.getenv("SELLERHARBOR_LLM_PROVIDER"), "anthropic" if base_url else "anthropic")
 
     return Settings(
+        environment=environment,
         port=port,
-        db_path=Path(_first(os.getenv("REVIEWPILOT_DB_PATH"), "data/reviewpilot.db")),
-        seed_demo=_truthy(_first(os.getenv("REVIEWPILOT_SEED_DEMO"), "true")),
+        db_path=Path(_first(os.getenv("SELLERHARBOR_DB_PATH"), "data/sellerharbor.db")),
+        seed_demo=_truthy(_first(os.getenv("SELLERHARBOR_SEED_DEMO"), "true")),
+        cors_allow_origins=_csv(os.getenv("SELLERHARBOR_CORS_ALLOW_ORIGINS")),
+        default_tenant_id=_first(os.getenv("SELLERHARBOR_DEFAULT_TENANT_ID"), "local"),
+        allowed_tenant_ids=_csv(os.getenv("SELLERHARBOR_ALLOWED_TENANT_IDS")),
+        auth_required=_truthy(_first(os.getenv("SELLERHARBOR_AUTH_REQUIRED"), "true" if environment == "production" else "false")),
+        api_keys=_csv(os.getenv("SELLERHARBOR_API_KEYS")),
+        rate_limit_enabled=_truthy(_first(os.getenv("SELLERHARBOR_RATE_LIMIT_ENABLED"), "true")),
+        requests_per_minute=int(_first(os.getenv("SELLERHARBOR_RATE_LIMIT_REQUESTS_PER_MINUTE"), "180")),
+        generation_jobs_per_minute=int(_first(os.getenv("SELLERHARBOR_RATE_LIMIT_GENERATION_JOBS_PER_MINUTE"), "12")),
+        generation_task_timeout_seconds=int(_first(os.getenv("SELLERHARBOR_GENERATION_TASK_TIMEOUT_SECONDS"), "600")),
         llm=LLMSettings(
             provider=provider.lower(),
             base_url=base_url.rstrip("/") if base_url else "",
             api_key=api_key,
             model=model,
-            timeout_seconds=float(_first(os.getenv("REVIEWPILOT_LLM_TIMEOUT_SECONDS"), "180")),
+            timeout_seconds=float(_first(os.getenv("SELLERHARBOR_LLM_TIMEOUT_SECONDS"), "180")),
+            connect_timeout_seconds=float(_first(os.getenv("SELLERHARBOR_LLM_CONNECT_TIMEOUT_SECONDS"), "5")),
         ),
         object_storage=ObjectStorageSettings(
-            endpoint=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_ENDPOINT")),
-            bucket=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_BUCKET"), "reviewpilot-assets"),
-            region=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_REGION"), "us-east-1"),
-            access_key=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_ACCESS_KEY")),
-            secret_key=_first(os.getenv("REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY")),
-            public_api_base_url=_first(os.getenv("REVIEWPILOT_PUBLIC_API_BASE_URL"), f"http://localhost:{port}").rstrip("/"),
+            endpoint=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_ENDPOINT")),
+            bucket=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_BUCKET"), "sellerharbor-assets"),
+            region=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_REGION"), "us-east-1"),
+            access_key=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_ACCESS_KEY")),
+            secret_key=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_SECRET_KEY")),
+            public_api_base_url=_first(os.getenv("SELLERHARBOR_PUBLIC_API_BASE_URL"), f"http://localhost:{port}").rstrip("/"),
         ),
     )
 
@@ -120,6 +147,12 @@ def _first(*values: str | None) -> str:
         if value and value.strip():
             return value.strip()
     return ""
+
+
+def _csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip().rstrip("/") for item in value.split(",") if item.strip()]
 
 
 settings = load_settings()
