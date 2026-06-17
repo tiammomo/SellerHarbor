@@ -35,6 +35,36 @@ class ObjectStorageSettings:
 
 
 @dataclass(frozen=True)
+class TemuSettings:
+    api_base_url: str
+    app_key: str
+    app_secret: str
+    access_token: str
+    seller_id: str
+    region: str
+    sandbox: bool
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_base_url and self.app_key and self.app_secret and self.access_token)
+
+    @property
+    def partially_configured(self) -> bool:
+        return any([self.app_key, self.app_secret, self.access_token, self.seller_id])
+
+
+@dataclass(frozen=True)
+class StoreSettings:
+    default_store_id: str
+    default_store_name: str
+    default_store_platform: str
+    default_store_region: str
+    default_store_warehouse: str
+    allowed_store_ids: list[str]
+    multi_store_enabled: bool
+
+
+@dataclass(frozen=True)
 class Settings:
     environment: str
     port: int
@@ -51,6 +81,8 @@ class Settings:
     generation_task_timeout_seconds: int
     llm: LLMSettings
     object_storage: ObjectStorageSettings
+    temu: TemuSettings
+    store: StoreSettings
 
 
 def load_settings() -> Settings:
@@ -110,6 +142,24 @@ def load_settings() -> Settings:
             access_key=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_ACCESS_KEY")),
             secret_key=_first(os.getenv("SELLERHARBOR_OBJECT_STORAGE_SECRET_KEY")),
             public_api_base_url=_first(os.getenv("SELLERHARBOR_PUBLIC_API_BASE_URL"), f"http://localhost:{port}").rstrip("/"),
+        ),
+        temu=TemuSettings(
+            api_base_url=_first(os.getenv("SELLERHARBOR_TEMU_API_BASE_URL"), "https://openapi.temu.com"),
+            app_key=_first(os.getenv("SELLERHARBOR_TEMU_APP_KEY")),
+            app_secret=_first(os.getenv("SELLERHARBOR_TEMU_APP_SECRET")),
+            access_token=_first(os.getenv("SELLERHARBOR_TEMU_ACCESS_TOKEN")),
+            seller_id=_first(os.getenv("SELLERHARBOR_TEMU_SELLER_ID")),
+            region=_first(os.getenv("SELLERHARBOR_TEMU_REGION"), "global"),
+            sandbox=_truthy(_first(os.getenv("SELLERHARBOR_TEMU_SANDBOX"), "false")),
+        ),
+        store=StoreSettings(
+            default_store_id=_first(os.getenv("SELLERHARBOR_DEFAULT_STORE_ID"), "primary-store"),
+            default_store_name=_first(os.getenv("SELLERHARBOR_DEFAULT_STORE_NAME"), "SellerHarbor 默认店铺"),
+            default_store_platform=_first(os.getenv("SELLERHARBOR_DEFAULT_STORE_PLATFORM"), "temu"),
+            default_store_region=_first(os.getenv("SELLERHARBOR_DEFAULT_STORE_REGION"), "global"),
+            default_store_warehouse=_first(os.getenv("SELLERHARBOR_DEFAULT_STORE_WAREHOUSE"), "US-West LA 3PL"),
+            allowed_store_ids=_csv(os.getenv("SELLERHARBOR_ALLOWED_STORE_IDS")),
+            multi_store_enabled=_truthy(_first(os.getenv("SELLERHARBOR_MULTI_STORE_ENABLED"), "false")),
         ),
     )
 

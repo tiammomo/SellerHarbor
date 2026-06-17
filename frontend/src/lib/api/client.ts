@@ -14,7 +14,9 @@ import type {
   ProductResearchProvider,
   PlatformRule,
   Product,
+  StoreRegistry,
   SystemReadiness,
+  TemuIntegrationStatus,
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:38081/api";
@@ -87,6 +89,8 @@ export type IngestOpenFoodFactsPayload = {
 export const apiClient = {
   getLlmHealth: () => request<LlmHealth>("/llm/health"),
   getReadiness: () => request<SystemReadiness>("/readiness"),
+  getTemuIntegrationStatus: () => request<TemuIntegrationStatus>("/integrations/temu/status"),
+  getStoreRegistry: () => request<StoreRegistry>("/stores/registry"),
   getAuditEvents: () => request<AuditEvent[]>("/audit/events"),
   getDashboard: () => request<DashboardStats>("/dashboard"),
   getBusinessOverview: () => request<BusinessOverview>("/business/overview"),

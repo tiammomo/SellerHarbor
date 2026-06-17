@@ -8,29 +8,35 @@ import {
   IconSettings,
   IconUser,
   IconSafe,
-  IconNotification,
   IconStorage,
+  IconApps,
 } from "@arco-design/web-react/icon";
 import { apiClient } from "@/lib/api/client";
 import PageHeader from "@/components/common/PageHeader";
-import type { LlmHealth, SystemReadiness } from "@/lib/types";
+import type { LlmHealth, StoreRegistry, SystemReadiness, TemuIntegrationStatus } from "@/lib/types";
 
 const FormItem = Form.Item;
 
 export default function SettingsPage() {
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null);
   const [readiness, setReadiness] = useState<SystemReadiness | null>(null);
+  const [temuStatus, setTemuStatus] = useState<TemuIntegrationStatus | null>(null);
+  const [storeRegistry, setStoreRegistry] = useState<StoreRegistry | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
   const refreshHealth = async () => {
     setHealthLoading(true);
     try {
-      const [nextLlmHealth, nextReadiness] = await Promise.all([
+      const [nextLlmHealth, nextReadiness, nextTemuStatus, nextStoreRegistry] = await Promise.all([
         apiClient.getLlmHealth(),
         apiClient.getReadiness(),
+        apiClient.getTemuIntegrationStatus(),
+        apiClient.getStoreRegistry(),
       ]);
       setLlmHealth(nextLlmHealth);
       setReadiness(nextReadiness);
+      setTemuStatus(nextTemuStatus);
+      setStoreRegistry(nextStoreRegistry);
     } catch (error) {
       Message.error(error instanceof Error ? error.message : "系统状态加载失败");
     } finally {
@@ -161,6 +167,175 @@ export default function SettingsPage() {
           </Card>
         </Tabs.TabPane>
 
+        <Tabs.TabPane key="integrations" title={<span className="flex items-center gap-1"><IconStorage /> 平台接入</span>}>
+          <div className="space-y-4 mt-4">
+            <Card style={{ borderRadius: 16 }}>
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div>
+                  <h3 className="text-base font-semibold" style={{ color: "var(--text-color-1)" }}>店铺管理预留</h3>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>
+                    当前按单店铺运行，商品主档保留在租户层，平台 Listing 和授权后续按 storeId 关联
+                  </div>
+                </div>
+                <Button icon={<IconRefresh />} loading={healthLoading} onClick={refreshHealth}>
+                  刷新
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                <StatusPanel
+                  label="运行模式"
+                  status={storeRegistry?.multiStoreEnabled ? "ready" : "planned"}
+                  detail={storeRegistry?.mode || "loading"}
+                />
+                <ConfigLine label="Default Store" value={storeRegistry?.defaultStoreId || "-"} />
+                <ConfigLine label="Tenant" value={storeRegistry?.tenantId || "-"} />
+              </div>
+
+              <div className="space-y-3 mb-5">
+                {(storeRegistry?.stores || []).map((store) => (
+                  <div key={store.id} className="p-4 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)" }}>
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <IconApps style={{ color: "var(--color-primary-6)" }} />
+                          <span className="text-sm font-semibold" style={{ color: "var(--text-color-1)" }}>{store.name}</span>
+                          <Tag color="arcoblue">{store.platformLabel}</Tag>
+                          {store.isDefault && <Tag color="green">default</Tag>}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs" style={{ color: "var(--text-color-3)" }}>
+                          <span>Store ID: {store.id}</span>
+                          <span>Region: {store.region}</span>
+                          <span>Warehouse: {store.defaultWarehouse}</span>
+                          <span>Credentials: {store.credentialScope}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 md:justify-end">
+                        <Tag color={statusColor(store.status)}>{store.status}</Tag>
+                        <Tag color={statusColor(store.connectionStatus)}>{store.connectionStatus}</Tag>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {store.capabilities.map((capability) => (
+                        <Tag key={capability.key} color={statusColor(capability.status)}>
+                          {capability.label}: {capability.status}
+                        </Tag>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h4 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>后续扩展槽</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+                {(storeRegistry?.expansionSlots || []).map((slot) => (
+                  <div key={slot.key} className="p-3 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)" }}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium" style={{ color: "var(--text-color-1)" }}>{slot.label}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>{slot.detail}</div>
+                      </div>
+                      <Tag color={statusColor(slot.status)}>{slot.status}</Tag>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {slot.requiredEnvVars.slice(0, 3).map((envVar) => (
+                        <Tag key={envVar} color="arcoblue">{envVar}</Tag>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h4 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>数据模型边界</h4>
+              <div className="space-y-2">
+                {(storeRegistry?.dataBoundaries || []).map((item) => (
+                  <div key={item.key} className="p-3 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)" }}>
+                    <div className="text-sm font-medium" style={{ color: "var(--text-color-1)" }}>{item.label}</div>
+                    <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>{item.currentState}</div>
+                    <div className="text-xs mt-1 break-words" style={{ color: "var(--text-color-3)" }}>{item.nextSchema}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card style={{ borderRadius: 16 }}>
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div>
+                  <h3 className="text-base font-semibold" style={{ color: "var(--text-color-1)" }}>Temu 只读同步准备</h3>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>
+                    先同步商品、订单、履约和库存信号；价格、库存、Listing 写回默认保持禁用
+                  </div>
+                </div>
+                <Button icon={<IconRefresh />} loading={healthLoading} onClick={refreshHealth}>
+                  刷新
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                <StatusPanel label="连接状态" status={temuStatus?.configured ? "healthy" : "skipped"} detail={temuStatus?.readiness || "loading"} />
+                <ConfigLine label="Region" value={temuStatus?.region || "-"} />
+                <ConfigLine label="Sandbox" value={temuStatus ? String(temuStatus.sandbox) : "-"} />
+              </div>
+
+              <h4 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>需要你稍后提供</h4>
+              <div className="space-y-2 mb-5">
+                {(temuStatus?.requirements || []).map((item) => (
+                  <div
+                    key={item.key}
+                    className="p-3 rounded-xl"
+                    style={{ backgroundColor: "var(--color-fill-1)" }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium" style={{ color: "var(--text-color-1)" }}>{item.label}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>{item.detail}</div>
+                      </div>
+                      <Tag color={statusColor(item.status)}>{item.status}</Tag>
+                    </div>
+                    {item.envVars.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {item.envVars.map((envVar) => (
+                          <Tag key={envVar} color="arcoblue">{envVar}</Tag>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <h4 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>能力推进顺序</h4>
+              <div className="space-y-2 mb-5">
+                {(temuStatus?.capabilities || []).map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex items-start justify-between gap-3 p-3 rounded-xl"
+                    style={{ backgroundColor: "var(--color-fill-1)" }}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium" style={{ color: "var(--text-color-1)" }}>{item.label}</span>
+                        <Tag color={item.mode === "write" ? "red" : item.mode === "event" ? "orange" : "green"}>{item.mode}</Tag>
+                      </div>
+                      <div className="text-xs" style={{ color: "var(--text-color-3)" }}>{item.detail}</div>
+                      <div className="text-xs mt-1" style={{ color: "var(--text-color-3)" }}>权限: {item.requiredPermission}</div>
+                    </div>
+                    <Tag color={statusColor(item.status)}>{item.status}</Tag>
+                  </div>
+                ))}
+              </div>
+
+              <h4 className="text-sm font-semibold mb-3" style={{ color: "var(--text-color-1)" }}>下一步动作</h4>
+              <div className="space-y-2">
+                {(temuStatus?.nextActions || []).map((action) => (
+                  <div key={action} className="text-sm p-3 rounded-xl" style={{ backgroundColor: "var(--color-fill-1)", color: "var(--text-color-2)" }}>
+                    {action}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </Tabs.TabPane>
+
         <Tabs.TabPane key="safety" title={<span className="flex items-center gap-1"><IconSafe /> 安全策略</span>}>
           <Card style={{ borderRadius: 16 }} className="mt-4">
             <div className="space-y-6">
@@ -261,8 +436,18 @@ function ConfigLine({ label, value }: { label: string; value: string }) {
 }
 
 function statusColor(status?: string) {
-  if (status === "healthy") return "green";
-  if (status === "degraded" || status === "skipped" || status === "enabled") return "orange";
-  if (status === "unavailable" || status === "unconfigured") return "red";
+  if (status === "healthy" || status === "ready" || status === "active") return "green";
+  if (
+    status === "degraded" ||
+    status === "skipped" ||
+    status === "enabled" ||
+    status === "manual" ||
+    status === "planned" ||
+    status === "needs_permission" ||
+    status === "needs_credentials" ||
+    status === "needs_authorization" ||
+    status === "ready_for_config"
+  ) return "orange";
+  if (status === "unavailable" || status === "unconfigured" || status === "missing" || status === "blocked" || status === "disabled") return "red";
   return "gray";
 }

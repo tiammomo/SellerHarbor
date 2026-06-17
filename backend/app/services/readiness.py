@@ -6,6 +6,8 @@ from app.core.config import settings
 from app.db import repository
 from app.services import object_storage
 from app.services.llm import llm_client
+from app.services.store_registry import build_store_registry
+from app.services.temu_integration import build_temu_integration_status
 
 
 async def build_readiness_report() -> dict[str, Any]:
@@ -13,6 +15,8 @@ async def build_readiness_report() -> dict[str, Any]:
         _database_check(),
         await _llm_check(),
         _object_storage_check(),
+        _temu_integration_check(),
+        _store_registry_check(),
         _tenant_check(),
         _auth_check(),
         _rate_limit_check(),
@@ -105,6 +109,57 @@ def _object_storage_check() -> dict[str, Any]:
         "severity": "warning",
         "detail": detail,
         "metadata": status,
+    }
+
+
+def _temu_integration_check() -> dict[str, Any]:
+    status = build_temu_integration_status()
+    if status.configured:
+        state = "healthy"
+        detail = "Temu read-only connector credentials are configured"
+    elif settings.temu.partially_configured:
+        state = "unconfigured"
+        detail = "Temu connector is partially configured; finish Seller Center authorization before syncing"
+    else:
+        state = "skipped"
+        detail = "Temu connector is not configured yet; read-only sync can be enabled after seller authorization"
+    return {
+        "key": "temu_integration",
+        "label": "Temu Integration",
+        "status": state,
+        "severity": "warning",
+        "detail": detail,
+        "metadata": {
+            "readiness": status.readiness,
+            "region": status.region,
+            "sandbox": status.sandbox,
+            "configured": status.configured,
+            "requiredEnvVars": status.credentialEnvVars,
+        },
+    }
+
+
+def _store_registry_check() -> dict[str, Any]:
+    registry = build_store_registry()
+    if registry.defaultStoreId:
+        state = "healthy"
+        detail = f"default store: {registry.defaultStoreId}; mode={registry.mode}"
+    else:
+        state = "unconfigured"
+        detail = "Set SELLERHARBOR_DEFAULT_STORE_ID before enabling platform store sync"
+    return {
+        "key": "store_registry",
+        "label": "Store Registry",
+        "status": state,
+        "severity": "warning",
+        "detail": detail,
+        "metadata": {
+            "mode": registry.mode,
+            "defaultStoreId": registry.defaultStoreId,
+            "multiStoreEnabled": registry.multiStoreEnabled,
+            "stores": [store.id for store in registry.stores],
+            "expansionSlots": [slot.key for slot in registry.expansionSlots],
+        },
     }
 
 

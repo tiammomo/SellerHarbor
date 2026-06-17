@@ -17,6 +17,8 @@ from app.services.observability import runtime_metrics
 from app.services.platform_rules import all_platform_rules
 from app.services.product_sourcing import all_research_providers, build_opportunity_report, build_opportunity_reports
 from app.services.readiness import build_readiness_report
+from app.services.store_registry import build_store_registry
+from app.services.temu_integration import build_temu_integration_status
 
 router = APIRouter()
 
@@ -59,6 +61,16 @@ async def metrics() -> dict:
 @router.get("/storage/status")
 async def storage_status() -> dict:
     return object_storage.status()
+
+
+@router.get("/integrations/temu/status")
+async def temu_integration_status():
+    return build_temu_integration_status()
+
+
+@router.get("/stores/registry")
+async def store_registry():
+    return build_store_registry()
 
 
 @router.api_route("/assets/{object_key:path}", methods=["GET", "HEAD"])

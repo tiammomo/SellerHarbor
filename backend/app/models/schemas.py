@@ -326,6 +326,103 @@ class CommerceOverview(BaseModel):
     generatedAt: str
 
 
+StoreStatus = Literal["active", "planned", "needs_credentials", "disabled"]
+StoreConnectionStatus = Literal["ready", "needs_credentials", "needs_authorization", "planned", "disabled"]
+StoreCapabilityMode = Literal["manual", "read", "write", "event"]
+StoreCapabilityStatus = Literal["ready", "planned", "needs_credentials", "needs_permission", "blocked"]
+
+
+class StoreCapability(BaseModel):
+    key: str
+    label: str
+    mode: StoreCapabilityMode
+    status: StoreCapabilityStatus
+    detail: str
+    riskLevel: Literal["low", "medium", "high"] = "medium"
+
+
+class StoreProfile(BaseModel):
+    id: str
+    tenantId: str = "local"
+    name: str
+    platform: CommercePlatform
+    platformLabel: str
+    status: StoreStatus
+    region: str
+    externalSellerId: str | None = None
+    isDefault: bool = False
+    defaultWarehouse: str
+    sharedInventoryGroup: str
+    credentialScope: str
+    connectionStatus: StoreConnectionStatus
+    capabilities: list[StoreCapability] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class StoreExpansionSlot(BaseModel):
+    key: str
+    label: str
+    platform: CommercePlatform
+    status: Literal["planned", "ready_for_config"]
+    detail: str
+    requiredEnvVars: list[str] = Field(default_factory=list)
+
+
+class StoreDataBoundary(BaseModel):
+    key: str
+    label: str
+    currentState: str
+    nextSchema: str
+    reason: str
+
+
+class StoreRegistry(BaseModel):
+    tenantId: str = "local"
+    mode: Literal["single_store", "multi_store_ready"] = "single_store"
+    defaultStoreId: str
+    multiStoreEnabled: bool = False
+    stores: list[StoreProfile] = Field(default_factory=list)
+    expansionSlots: list[StoreExpansionSlot] = Field(default_factory=list)
+    dataBoundaries: list[StoreDataBoundary] = Field(default_factory=list)
+    nextActions: list[str] = Field(default_factory=list)
+    updatedAt: str
+
+
+class TemuRequirement(BaseModel):
+    key: str
+    label: str
+    status: Literal["ready", "missing", "manual"]
+    detail: str
+    envVars: list[str] = Field(default_factory=list)
+
+
+class TemuCapability(BaseModel):
+    key: str
+    label: str
+    mode: Literal["read", "write", "event"]
+    status: Literal["ready", "planned", "needs_permission", "blocked"]
+    detail: str
+    requiredPermission: str
+    riskLevel: Literal["low", "medium", "high"] = "medium"
+
+
+class TemuIntegrationStatus(BaseModel):
+    platform: Literal["temu"] = "temu"
+    label: str = "Temu"
+    configured: bool = False
+    readiness: Literal["ready", "needs_credentials", "needs_authorization", "planned"] = "needs_credentials"
+    mode: Literal["read_only_first", "disabled"] = "read_only_first"
+    region: str
+    sandbox: bool = False
+    apiBaseUrl: str
+    credentialEnvVars: list[str] = Field(default_factory=list)
+    requirements: list[TemuRequirement] = Field(default_factory=list)
+    capabilities: list[TemuCapability] = Field(default_factory=list)
+    nextActions: list[str] = Field(default_factory=list)
+    docs: list[str] = Field(default_factory=list)
+    updatedAt: str
+
+
 class ProductResearchProvider(BaseModel):
     id: str
     name: str

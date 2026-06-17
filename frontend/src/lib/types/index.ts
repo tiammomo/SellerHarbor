@@ -431,6 +431,62 @@ export interface CommerceOverview {
   generatedAt: string;
 }
 
+export interface StoreCapability {
+  key: string;
+  label: string;
+  mode: "manual" | "read" | "write" | "event";
+  status: "ready" | "planned" | "needs_credentials" | "needs_permission" | "blocked";
+  detail: string;
+  riskLevel: "low" | "medium" | "high";
+}
+
+export interface StoreProfile {
+  id: string;
+  tenantId: string;
+  name: string;
+  platform: CommercePlatform;
+  platformLabel: string;
+  status: "active" | "planned" | "needs_credentials" | "disabled";
+  region: string;
+  externalSellerId?: string;
+  isDefault: boolean;
+  defaultWarehouse: string;
+  sharedInventoryGroup: string;
+  credentialScope: string;
+  connectionStatus: "ready" | "needs_credentials" | "needs_authorization" | "planned" | "disabled";
+  capabilities: StoreCapability[];
+  notes: string[];
+}
+
+export interface StoreExpansionSlot {
+  key: string;
+  label: string;
+  platform: CommercePlatform;
+  status: "planned" | "ready_for_config";
+  detail: string;
+  requiredEnvVars: string[];
+}
+
+export interface StoreDataBoundary {
+  key: string;
+  label: string;
+  currentState: string;
+  nextSchema: string;
+  reason: string;
+}
+
+export interface StoreRegistry {
+  tenantId: string;
+  mode: "single_store" | "multi_store_ready";
+  defaultStoreId: string;
+  multiStoreEnabled: boolean;
+  stores: StoreProfile[];
+  expansionSlots: StoreExpansionSlot[];
+  dataBoundaries: StoreDataBoundary[];
+  nextActions: string[];
+  updatedAt: string;
+}
+
 export interface LlmHealth {
   status: "healthy" | "degraded" | "unavailable" | "unconfigured" | "skipped";
   configured: boolean;
@@ -455,6 +511,41 @@ export interface SystemReadiness {
   environment: string;
   time: string;
   checks: ReadinessCheck[];
+}
+
+export interface TemuRequirement {
+  key: string;
+  label: string;
+  status: "ready" | "missing" | "manual";
+  detail: string;
+  envVars: string[];
+}
+
+export interface TemuCapability {
+  key: string;
+  label: string;
+  mode: "read" | "write" | "event";
+  status: "ready" | "planned" | "needs_permission" | "blocked";
+  detail: string;
+  requiredPermission: string;
+  riskLevel: "low" | "medium" | "high";
+}
+
+export interface TemuIntegrationStatus {
+  platform: "temu";
+  label: string;
+  configured: boolean;
+  readiness: "ready" | "needs_credentials" | "needs_authorization" | "planned";
+  mode: "read_only_first" | "disabled";
+  region: string;
+  sandbox: boolean;
+  apiBaseUrl: string;
+  credentialEnvVars: string[];
+  requirements: TemuRequirement[];
+  capabilities: TemuCapability[];
+  nextActions: string[];
+  docs: string[];
+  updatedAt: string;
 }
 
 // Content type labels

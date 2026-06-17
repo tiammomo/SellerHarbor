@@ -126,6 +126,40 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertIn("database", {check["key"] for check in body["checks"]})
         self.assertIn("llm", {check["key"] for check in body["checks"]})
         self.assertIn("generation_queue", {check["key"] for check in body["checks"]})
+        self.assertIn("temu_integration", {check["key"] for check in body["checks"]})
+        self.assertIn("store_registry", {check["key"] for check in body["checks"]})
+
+    def test_temu_integration_status_lists_read_only_requirements(self) -> None:
+        response = self.client.get("/api/integrations/temu/status")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["platform"], "temu")
+        self.assertFalse(body["configured"])
+        self.assertEqual(body["readiness"], "needs_credentials")
+        self.assertTrue(any(item["key"] == "partner_app" for item in body["requirements"]))
+        self.assertTrue(any(item["key"] == "products_read" and item["mode"] == "read" for item in body["capabilities"]))
+        self.assertTrue(any(item["key"] == "listing_write" and item["status"] == "blocked" for item in body["capabilities"]))
+        serialized = str(body).lower()
+        self.assertNotIn("secret-token", serialized)
+        self.assertIn("sellerharbor_temu_app_key", serialized)
+
+    def test_store_registry_keeps_multi_store_extension_point(self) -> None:
+        response = self.client.get("/api/stores/registry")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["tenantId"], "local")
+        self.assertEqual(body["mode"], "single_store")
+        self.assertEqual(body["defaultStoreId"], "primary-store")
+        self.assertEqual(len(body["stores"]), 1)
+        default_store = body["stores"][0]
+        self.assertTrue(default_store["isDefault"])
+        self.assertEqual(default_store["platform"], "temu")
+        self.assertTrue(any(item["key"] == "tenant_catalog" and item["status"] == "ready" for item in default_store["capabilities"]))
+        self.assertTrue(any(item["platform"] == "tiktok_shop" for item in body["expansionSlots"]))
+        self.assertTrue(any(item["key"] == "platform_listings" for item in body["dataBoundaries"]))
+        self.assertNotIn("secret-token", str(body).lower())
 
     def test_readiness_skips_unconfigured_llm_in_development(self) -> None:
         with patch(
