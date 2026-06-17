@@ -5,8 +5,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    REVIEWPILOT_PORT=38081 \
-    REVIEWPILOT_DB_PATH=/data/reviewpilot.db
+    SELLERHARBOR_PORT=38081 \
+    SELLERHARBOR_DB_PATH=/data/sellerharbor.db
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev

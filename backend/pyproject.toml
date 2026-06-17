@@ -1,7 +1,7 @@
 [project]
-name = "reviewpilot-backend"
+name = "sellerharbor-backend"
 version = "0.1.0"
-description = "ReviewPilot Python backend powered by FastAPI, LangChain, and LangGraph"
+description = "SellerHarbor Python backend powered by FastAPI, LangChain, and LangGraph"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.125.0",

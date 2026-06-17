@@ -1,40 +1,53 @@
-name: reviewpilot
+name: sellerharbor
 
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: reviewpilot/backend:local
-    container_name: reviewpilot-backend
+    image: sellerharbor/backend:local
+    container_name: sellerharbor-backend
     environment:
-      REVIEWPILOT_PORT: "38081"
-      REVIEWPILOT_DB_PATH: /data/reviewpilot.db
-      REVIEWPILOT_SEED_DEMO: "${REVIEWPILOT_SEED_DEMO:-true}"
+      SELLERHARBOR_PORT: "38081"
+      SELLERHARBOR_ENV: "${SELLERHARBOR_ENV:-development}"
+      SELLERHARBOR_DB_PATH: /data/sellerharbor.db
+      SELLERHARBOR_SEED_DEMO: "${SELLERHARBOR_SEED_DEMO:-true}"
+      SELLERHARBOR_CORS_ALLOW_ORIGINS: "${SELLERHARBOR_CORS_ALLOW_ORIGINS:-http://localhost:33001}"
+      SELLERHARBOR_DEFAULT_TENANT_ID: "${SELLERHARBOR_DEFAULT_TENANT_ID:-local}"
+      SELLERHARBOR_ALLOWED_TENANT_IDS: "${SELLERHARBOR_ALLOWED_TENANT_IDS:-}"
+      SELLERHARBOR_AUTH_REQUIRED: "${SELLERHARBOR_AUTH_REQUIRED:-false}"
+      SELLERHARBOR_API_KEYS: "${SELLERHARBOR_API_KEYS:-}"
+      SELLERHARBOR_RATE_LIMIT_ENABLED: "${SELLERHARBOR_RATE_LIMIT_ENABLED:-true}"
+      SELLERHARBOR_RATE_LIMIT_REQUESTS_PER_MINUTE: "${SELLERHARBOR_RATE_LIMIT_REQUESTS_PER_MINUTE:-180}"
+      SELLERHARBOR_RATE_LIMIT_GENERATION_JOBS_PER_MINUTE: "${SELLERHARBOR_RATE_LIMIT_GENERATION_JOBS_PER_MINUTE:-12}"
+      SELLERHARBOR_GENERATION_TASK_TIMEOUT_SECONDS: "${SELLERHARBOR_GENERATION_TASK_TIMEOUT_SECONDS:-600}"
       ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-http://host.docker.internal:17878}"
       ANTHROPIC_AUTH_TOKEN: "${ANTHROPIC_AUTH_TOKEN:-}"
       ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-mimo-v2.5-pro}"
-      REVIEWPILOT_LLM_TIMEOUT_SECONDS: "${REVIEWPILOT_LLM_TIMEOUT_SECONDS:-180}"
-      REVIEWPILOT_PUBLIC_API_BASE_URL: "${REVIEWPILOT_PUBLIC_API_BASE_URL:-http://localhost:38081}"
-      REVIEWPILOT_POSTGRES_DSN: "${REVIEWPILOT_POSTGRES_DSN:-postgresql://reviewpilot:reviewpilot@postgres:5432/reviewpilot}"
-      REVIEWPILOT_REDIS_URL: "${REVIEWPILOT_REDIS_URL:-redis://redis:6379/0}"
-      REVIEWPILOT_OBJECT_STORAGE_ENDPOINT: "${REVIEWPILOT_OBJECT_STORAGE_ENDPOINT:-http://minio:9000}"
-      REVIEWPILOT_OBJECT_STORAGE_BUCKET: "${REVIEWPILOT_OBJECT_STORAGE_BUCKET:-reviewpilot-assets}"
-      REVIEWPILOT_OBJECT_STORAGE_REGION: "${REVIEWPILOT_OBJECT_STORAGE_REGION:-us-east-1}"
-      REVIEWPILOT_OBJECT_STORAGE_ACCESS_KEY: "${REVIEWPILOT_OBJECT_STORAGE_ACCESS_KEY:-reviewpilot}"
-      REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY: "${REVIEWPILOT_OBJECT_STORAGE_SECRET_KEY:-reviewpilot-secret}"
+      SELLERHARBOR_LLM_TIMEOUT_SECONDS: "${SELLERHARBOR_LLM_TIMEOUT_SECONDS:-180}"
+      SELLERHARBOR_LLM_CONNECT_TIMEOUT_SECONDS: "${SELLERHARBOR_LLM_CONNECT_TIMEOUT_SECONDS:-5}"
+      SELLERHARBOR_PUBLIC_API_BASE_URL: "${SELLERHARBOR_PUBLIC_API_BASE_URL:-http://localhost:38081}"
+      SELLERHARBOR_POSTGRES_DSN: "${SELLERHARBOR_POSTGRES_DSN:-postgresql://sellerharbor:sellerharbor@postgres:5432/sellerharbor}"
+      SELLERHARBOR_REDIS_URL: "${SELLERHARBOR_REDIS_URL:-redis://redis:6379/0}"
+      SELLERHARBOR_OBJECT_STORAGE_ENDPOINT: "${SELLERHARBOR_OBJECT_STORAGE_ENDPOINT:-http://minio:9000}"
+      SELLERHARBOR_OBJECT_STORAGE_BUCKET: "${SELLERHARBOR_OBJECT_STORAGE_BUCKET:-sellerharbor-assets}"
+      SELLERHARBOR_OBJECT_STORAGE_REGION: "${SELLERHARBOR_OBJECT_STORAGE_REGION:-us-east-1}"
+      SELLERHARBOR_OBJECT_STORAGE_ACCESS_KEY: "${SELLERHARBOR_OBJECT_STORAGE_ACCESS_KEY:-sellerharbor}"
+      SELLERHARBOR_OBJECT_STORAGE_SECRET_KEY: "${SELLERHARBOR_OBJECT_STORAGE_SECRET_KEY:-sellerharbor-secret}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "38081:38081"
     volumes:
-      - reviewpilot-backend-data:/data
+      - sellerharbor-backend-data:/data
+    init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     networks:
-      - reviewpilot
+      - sellerharbor
 
   frontend:
     build:
@@ -42,8 +55,10 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL:-http://localhost:38081/api}"
-    image: reviewpilot/frontend:local
-    container_name: reviewpilot-frontend
+        NEXT_PUBLIC_SELLERHARBOR_TENANT_ID: "${NEXT_PUBLIC_SELLERHARBOR_TENANT_ID:-local}"
+        NEXT_PUBLIC_SELLERHARBOR_API_KEY: "${NEXT_PUBLIC_SELLERHARBOR_API_KEY:-}"
+    image: sellerharbor/frontend:local
+    container_name: sellerharbor-frontend
     environment:
       PORT: "33001"
       HOSTNAME: "0.0.0.0"
@@ -53,90 +68,137 @@ services:
         condition: service_healthy
     ports:
       - "33001:33001"
+    init: true
+    stop_grace_period: 20s
     restart: unless-stopped
     networks:
-      - reviewpilot
+      - sellerharbor
 
   postgres:
     image: postgres:17-alpine
-    container_name: reviewpilot-postgres
+    container_name: sellerharbor-postgres
     profiles:
       - infra
     environment:
-      POSTGRES_DB: "${POSTGRES_DB:-reviewpilot}"
-      POSTGRES_USER: "${POSTGRES_USER:-reviewpilot}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-reviewpilot}"
+      POSTGRES_DB: "${POSTGRES_DB:-sellerharbor}"
+      POSTGRES_USER: "${POSTGRES_USER:-sellerharbor}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-sellerharbor}"
     ports:
       - "35432:5432"
     volumes:
-      - reviewpilot-postgres-data:/var/lib/postgresql/data
+      - sellerharbor-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     networks:
-      - reviewpilot
+      - sellerharbor
 
   redis:
     image: redis:7-alpine
-    container_name: reviewpilot-redis
+    container_name: sellerharbor-redis
     profiles:
       - infra
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "36379:6379"
     volumes:
-      - reviewpilot-redis-data:/data
+      - sellerharbor-redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    init: true
+    stop_grace_period: 20s
     restart: unless-stopped
     networks:
-      - reviewpilot
+      - sellerharbor
 
   minio:
     image: minio/minio:latest
-    container_name: reviewpilot-minio
+    container_name: sellerharbor-minio
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-reviewpilot}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-reviewpilot-secret}"
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-sellerharbor}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-sellerharbor-secret}"
     ports:
       - "39000:9000"
       - "39001:9001"
     volumes:
-      - reviewpilot-minio-data:/data
+      - sellerharbor-minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     networks:
-      - reviewpilot
+      - sellerharbor
 
   minio-init:
     image: minio/mc:latest
-    container_name: reviewpilot-minio-init
+    container_name: sellerharbor-minio-init
+    profiles:
+      - init
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      until mc alias set reviewpilot http://minio:9000 $${MINIO_ROOT_USER:-reviewpilot} $${MINIO_ROOT_PASSWORD:-reviewpilot-secret}; do sleep 2; done;
-      mc mb --ignore-existing reviewpilot/$${REVIEWPILOT_OBJECT_STORAGE_BUCKET:-reviewpilot-assets};
+      until mc alias set sellerharbor http://minio:9000 $${MINIO_ROOT_USER:-sellerharbor} $${MINIO_ROOT_PASSWORD:-sellerharbor-secret}; do sleep 2; done;
+      mc mb --ignore-existing sellerharbor/$${SELLERHARBOR_OBJECT_STORAGE_BUCKET:-sellerharbor-assets};
       "
     environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-reviewpilot}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-reviewpilot-secret}"
-      REVIEWPILOT_OBJECT_STORAGE_BUCKET: "${REVIEWPILOT_OBJECT_STORAGE_BUCKET:-reviewpilot-assets}"
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-sellerharbor}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-sellerharbor-secret}"
+      SELLERHARBOR_OBJECT_STORAGE_BUCKET: "${SELLERHARBOR_OBJECT_STORAGE_BUCKET:-sellerharbor-assets}"
+    restart: "no"
     networks:
-      - reviewpilot
+      - sellerharbor
+
+  sqlite-backup:
+    image: alpine:3.20
+    container_name: sellerharbor-sqlite-backup
+    profiles:
+      - ops
+    environment:
+      SELLERHARBOR_BACKUP_INTERVAL_SECONDS: "${SELLERHARBOR_BACKUP_INTERVAL_SECONDS:-86400}"
+      SELLERHARBOR_BACKUP_RETENTION_DAYS: "${SELLERHARBOR_BACKUP_RETENTION_DAYS:-14}"
+    command: >
+      /bin/sh -ec '
+      mkdir -p /backups;
+      while true; do
+        ts=$(date -u +%Y%m%dT%H%M%SZ);
+        if [ -f /data/sellerharbor.db ]; then
+          tar -czf /backups/sellerharbor-sqlite-$$ts.tgz -C /data sellerharbor.db;
+          find /backups -name "sellerharbor-sqlite-*.tgz" -type f -mtime +$${SELLERHARBOR_BACKUP_RETENTION_DAYS:-14} -delete;
+        fi;
+        sleep $${SELLERHARBOR_BACKUP_INTERVAL_SECONDS:-86400};
+      done
+      '
+    volumes:
+      - sellerharbor-backend-data:/data:ro
+      - sellerharbor-backups:/backups
+    init: true
+    stop_grace_period: 20s
+    restart: unless-stopped
+    networks:
+      - sellerharbor
 
 networks:
-  reviewpilot:
+  sellerharbor:
     driver: bridge
 
 volumes:
-  reviewpilot-backend-data:
-  reviewpilot-postgres-data:
-  reviewpilot-redis-data:
-  reviewpilot-minio-data:
+  sellerharbor-backend-data:
+  sellerharbor-postgres-data:
+  sellerharbor-redis-data:
+  sellerharbor-minio-data:
+  sellerharbor-backups:
