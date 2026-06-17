@@ -1,6 +1,6 @@
-# ReviewPilot Backend
+# SellerHarbor Backend
 
-Python backend for ReviewPilot, built with FastAPI, LangChain, and LangGraph.
+Python backend for SellerHarbor, built with FastAPI, LangChain, and LangGraph.
 
 ## Runtime
 

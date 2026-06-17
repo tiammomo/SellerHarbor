@@ -1,4 +1,4 @@
-# ReviewPilot 提示词与生成策略
+# SellerHarbor 提示词与生成策略
 
 ## 1. 提示词原则
 
